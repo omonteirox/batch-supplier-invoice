@@ -2,5 +2,5 @@
 @MappingRole: true
 define role ZI_BSI_Upload {
   grant select on ZI_BSI_Upload
-  where inheriting conditions from entity I_CompanyCode;
+  where true;
 }

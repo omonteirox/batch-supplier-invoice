@@ -1,6 +1,6 @@
 @AccessControl.authorizationCheck: #CHECK
 @Metadata.allowExtensions: true
-@EndUserText.label: 'Batch Supplier Invoice Upload - Projection'
+@EndUserText.label: 'BSI Upload - Projection'
 @ObjectModel.semanticKey: ['CompanyCode', 'Reference']
 define root view entity ZC_BSI_Upload
   provider contract transactional_query
