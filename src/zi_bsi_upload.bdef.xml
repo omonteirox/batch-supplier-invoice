@@ -2,10 +2,9 @@
 <abapGit version="v1.0.0" serializer="LCL_OBJECT_BDEF" serializer_version="v1.0.0">
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
-   <BDEF_DATA>
-    <DDLANGUAGE>E</DDLANGUAGE>
-    <DDTEXT>Batch Supplier Invoice Upload - Behavior Definition</DDTEXT>
-   </BDEF_DATA>
+   <BDEF>
+    <DESCRIPTION>Batch Supplier Invoice Upload - Behavior Definition</DESCRIPTION>
+   </BDEF>
   </asx:values>
  </asx:abap>
 </abapGit>

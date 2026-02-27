@@ -2,13 +2,14 @@
 <abapGit version="v1.0.0" serializer="LCL_OBJECT_SRVB" serializer_version="v1.0.0">
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
-   <METADATA>
-    <LANGUAGE>E</LANGUAGE>
-    <DESCRIPTION>Batch Supplier Invoice Upload - OData V4 UI</DESCRIPTION>
-    <BINDING_TYPE>ODATA_V4_UI</BINDING_TYPE>
-    <SERVICE_DEFINITION>ZSD_BSI_UPLOAD</SERVICE_DEFINITION>
-    <SERVICE_VERSION>0001</SERVICE_VERSION>
-   </METADATA>
+   <SRVB>
+    <METADATA>
+     <DESCRIPTION>Batch Supplier Invoice Upload - OData V4 UI</DESCRIPTION>
+     <BINDING_TYPE>ODATA_V4_UI</BINDING_TYPE>
+     <SERVICE_DEFINITION>ZSD_BSI_UPLOAD</SERVICE_DEFINITION>
+     <SERVICE_VERSION>0001</SERVICE_VERSION>
+    </METADATA>
+   </SRVB>
   </asx:values>
  </asx:abap>
 </abapGit>
