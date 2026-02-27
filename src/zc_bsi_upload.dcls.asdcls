@@ -1,0 +1,6 @@
+@EndUserText.label: 'Access Control for ZC_BSI_Upload'
+@MappingRole: true
+define role ZC_BSI_Upload {
+  grant select on ZC_BSI_Upload
+  where ( CompanyCode ) = aspect pfcg_auth ( BUKRS, BUKRS, ACTVT = '03' );
+}

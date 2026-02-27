@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <COMMUNICATION_SCENARIO>
+    <CSCN_ID>Z_BSI_SUPLRINVC</CSCN_ID>
+    <DESCRIPTION>Batch Supplier Invoice - Outbound to API_SUPPLIERINVOICE_PROCESS_SRV</DESCRIPTION>
+    <INBOUND_SERVICES/>
+    <OUTBOUND_SERVICES>
+     <OUTBOUND_SERVICE>
+      <OUTBOUND_SERVICE_ID>Z_BSI_SUPLRINVC_REST</OUTBOUND_SERVICE_ID>
+      <DESCRIPTION>Supplier Invoice API Outbound</DESCRIPTION>
+      <SERVICE_TYPE>HTTP</SERVICE_TYPE>
+      <DEFAULT_PATH_PREFIX>/sap/opu/odata/sap/API_SUPPLIERINVOICE_PROCESS_SRV</DEFAULT_PATH_PREFIX>
+      <IS_CLOUD_CALL>X</IS_CLOUD_CALL>
+     </OUTBOUND_SERVICE>
+    </OUTBOUND_SERVICES>
+    <ALLOWED_INSTANCES>MULTIPLE</ALLOWED_INSTANCES>
+   </COMMUNICATION_SCENARIO>
+  </asx:values>
+ </asx:abap>
+</abapGit>

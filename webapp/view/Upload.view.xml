@@ -1,0 +1,188 @@
+<mvc:View
+  controllerName="zbsi.batchsupplierinvoice.controller.Upload"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+  xmlns:u="sap.ui.unified"
+  xmlns:l="sap.ui.layout"
+  xmlns:core="sap.ui.core"
+  displayBlock="true">
+
+  <App id="app">
+    <pages>
+      <Page
+        id="uploadPage"
+        title="{i18n>pageTitle}"
+        showHeader="true"
+        enableScrolling="true">
+
+        <headerContent>
+          <Title id="headerTitle" text="{i18n>appTitle}" level="H1"/>
+        </headerContent>
+
+        <content>
+          <VBox id="mainContent" class="sapUiMediumMargin">
+
+            <!-- Step 1: Company Code Selection -->
+            <Panel id="panelCompany" headerText="{i18n>stepCompany}" class="sapUiSmallMarginBottom">
+              <l:HorizontalLayout id="companyLayout" class="sapUiSmallMargin">
+                <Label id="lblCompany" text="{i18n>company}" labelFor="inputCompany" class="sapUiSmallMarginEnd"/>
+                <Input
+                  id="inputCompany"
+                  value="{upload>/companyCode}"
+                  width="12rem"
+                  placeholder="{i18n>companyPlaceholder}"
+                  maxLength="4"
+                  change="onCompanyCodeChange"/>
+              </l:HorizontalLayout>
+            </Panel>
+
+            <!-- Step 2: File Upload -->
+            <Panel id="panelFile" headerText="{i18n>stepFile}" class="sapUiSmallMarginBottom">
+              <l:HorizontalLayout id="fileLayout" class="sapUiSmallMargin">
+                <u:FileUploader
+                  id="fileUploader"
+                  name="fileUploader"
+                  fileType="xlsx,csv"
+                  typeMissmatch="onTypeMismatch"
+                  change="onFileChange"
+                  buttonText="{i18n>selectFile}"
+                  placeholder="{i18n>filePlaceholder}"
+                  style="Emphasized"
+                  width="25rem"/>
+              </l:HorizontalLayout>
+            </Panel>
+
+            <!-- Step 3: Data Preview Table -->
+            <Panel
+              id="panelPreview"
+              headerText="{i18n>stepPreview}"
+              visible="{upload>/hasData}"
+              class="sapUiSmallMarginBottom">
+
+              <headerToolbar>
+                <OverflowToolbar id="previewToolbar">
+                  <Title id="previewTitle" text="{i18n>stepPreview}"/>
+                  <ToolbarSpacer id="spacer1"/>
+                  <Label id="lblCount" text="{i18n>totalRows}:"/>
+                  <ObjectNumber
+                    id="rowCount"
+                    number="{= ${upload>/items}.length}"
+                    emphasized="false"/>
+                  <ToolbarSpacer id="spacer2"/>
+                  <Button
+                    id="btnExecute"
+                    text="{i18n>executeBatch}"
+                    type="Emphasized"
+                    icon="sap-icon://upload-to-cloud"
+                    press="onExecuteBatch"
+                    enabled="{= ${upload>/companyCode} !== '' &amp;&amp; ${upload>/items}.length > 0 &amp;&amp; !${upload>/isLoading}}"/>
+                  <Button
+                    id="btnClear"
+                    text="{i18n>clearData}"
+                    type="Reject"
+                    icon="sap-icon://delete"
+                    press="onClearData"/>
+                </OverflowToolbar>
+              </headerToolbar>
+
+              <Table
+                id="uploadTable"
+                items="{upload>/items}"
+                growing="true"
+                growingThreshold="50"
+                alternateRowColors="true"
+                sticky="ColumnHeaders,HeaderToolbar">
+                <columns>
+                  <Column id="colLine" width="4rem"><Text id="hdrLine" text="{i18n>line}"/></Column>
+                  <Column id="colDocDate"><Text id="hdrDocDate" text="{i18n>documentDate}"/></Column>
+                  <Column id="colPostDate"><Text id="hdrPostDate" text="{i18n>postingDate}"/></Column>
+                  <Column id="colRef"><Text id="hdrRef" text="{i18n>reference}"/></Column>
+                  <Column id="colSupplier"><Text id="hdrSupplier" text="{i18n>supplier}"/></Column>
+                  <Column id="colAmount" hAlign="End"><Text id="hdrAmount" text="{i18n>amount}"/></Column>
+                  <Column id="colCurrency" width="5rem"><Text id="hdrCurrency" text="{i18n>currency}"/></Column>
+                  <Column id="colPO"><Text id="hdrPO" text="{i18n>purchaseOrder}"/></Column>
+                  <Column id="colPOItem" width="6rem"><Text id="hdrPOItem" text="{i18n>poItem}"/></Column>
+                  <Column id="colTax" width="5rem"><Text id="hdrTax" text="{i18n>taxCode}"/></Column>
+                  <Column id="colNFCat" width="6rem"><Text id="hdrNFCat" text="{i18n>nfCategory}"/></Column>
+                  <Column id="colStatus" width="6rem"><Text id="hdrStatus" text="{i18n>status}"/></Column>
+                  <Column id="colMsg"><Text id="hdrMsg" text="{i18n>message}"/></Column>
+                </columns>
+                <items>
+                  <ColumnListItem id="uploadRow" vAlign="Middle">
+                    <cells>
+                      <Text id="cellLine" text="{upload>line}"/>
+                      <Text id="cellDocDate" text="{upload>documentDate}"/>
+                      <Text id="cellPostDate" text="{upload>postingDate}"/>
+                      <Text id="cellReference" text="{upload>reference}"/>
+                      <Text id="cellSupplier" text="{upload>invoicingParty}"/>
+                      <ObjectNumber id="cellAmount" number="{upload>grossAmount}" unit="{upload>currency}"/>
+                      <Text id="cellCurrency" text="{upload>currency}"/>
+                      <Text id="cellPO" text="{upload>purchaseOrder}"/>
+                      <Text id="cellPOItem" text="{upload>poItem}"/>
+                      <Text id="cellTax" text="{upload>taxCode}"/>
+                      <Text id="cellNFCat" text="{upload>nfCategory}"/>
+                      <ObjectStatus
+                        id="cellStatus"
+                        text="{upload>statusText}"
+                        state="{= ${upload>status} === 'S' ? 'Success' : ${upload>status} === 'E' ? 'Error' : 'Information'}"/>
+                      <Text id="cellMsg" text="{upload>message}"/>
+                    </cells>
+                  </ColumnListItem>
+                </items>
+              </Table>
+            </Panel>
+
+            <!-- Step 4: Results Summary -->
+            <Panel
+              id="panelResults"
+              headerText="{i18n>stepResults}"
+              visible="{upload>/hasResults}"
+              class="sapUiSmallMarginBottom">
+              <l:HorizontalLayout id="resultsLayout" class="sapUiSmallMargin">
+                <GenericTile
+                  id="tileSuccess"
+                  header="{i18n>success}"
+                  subheader="{upload>/totalSuccess}"
+                  frameType="OneByHalf"
+                  state="Loaded"
+                  class="sapUiSmallMarginEnd">
+                  <TileContent id="tileSuccessContent">
+                    <NumericContent
+                      id="numSuccess"
+                      value="{upload>/totalSuccess}"
+                      valueColor="Good"
+                      icon="sap-icon://accept"/>
+                  </TileContent>
+                </GenericTile>
+                <GenericTile
+                  id="tileError"
+                  header="{i18n>errors}"
+                  subheader="{upload>/totalError}"
+                  frameType="OneByHalf"
+                  state="Loaded"
+                  class="sapUiSmallMarginEnd">
+                  <TileContent id="tileErrorContent">
+                    <NumericContent
+                      id="numError"
+                      value="{upload>/totalError}"
+                      valueColor="Error"
+                      icon="sap-icon://error"/>
+                  </TileContent>
+                </GenericTile>
+              </l:HorizontalLayout>
+            </Panel>
+
+          </VBox>
+        </content>
+
+        <footer>
+          <OverflowToolbar id="footerToolbar">
+            <ToolbarSpacer id="footerSpacer"/>
+            <BusyIndicator id="busyIndicator" visible="{upload>/isLoading}" size="Small"/>
+          </OverflowToolbar>
+        </footer>
+
+      </Page>
+    </pages>
+  </App>
+</mvc:View>

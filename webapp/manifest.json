@@ -1,0 +1,125 @@
+{
+  "_version": "1.65.0",
+  "sap.app": {
+    "id": "zbsi.batchsupplierinvoice",
+    "type": "application",
+    "i18n": "i18n/i18n.properties",
+    "applicationVersion": {
+      "version": "1.0.0"
+    },
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}",
+    "sourceTemplate": {
+      "id": "@sap/generator-fiori:basic",
+      "version": "1.0.0",
+      "toolsId": "custom"
+    },
+    "dataSources": {
+      "mainService": {
+        "uri": "/sap/opu/odata4/sap/zsb_bsi_upload/srvd_a2x/sap/zsd_bsi_upload/0001/",
+        "type": "OData",
+        "settings": {
+          "odataVersion": "4.0"
+        }
+      }
+    },
+    "crossNavigation": {
+      "inbounds": {
+        "BatchSupplierInvoice-upload": {
+          "semanticObject": "BatchSupplierInvoice",
+          "action": "upload",
+          "title": "{{appTitle}}",
+          "signature": {
+            "parameters": {},
+            "additionalParameters": "allowed"
+          }
+        }
+      }
+    }
+  },
+  "sap.ui": {
+    "technology": "UI5",
+    "icons": {
+      "icon": "sap-icon://upload-to-cloud"
+    },
+    "deviceTypes": {
+      "desktop": true,
+      "tablet": true,
+      "phone": false
+    }
+  },
+  "sap.ui5": {
+    "flexEnabled": false,
+    "dependencies": {
+      "minUI5Version": "1.120.0",
+      "libs": {
+        "sap.m": {},
+        "sap.ui.core": {},
+        "sap.ui.layout": {},
+        "sap.ui.table": {},
+        "sap.ui.unified": {}
+      }
+    },
+    "contentDensities": {
+      "compact": true,
+      "cozy": true
+    },
+    "models": {
+      "i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "settings": {
+          "bundleName": "zbsi.batchsupplierinvoice.i18n.i18n"
+        }
+      },
+      "": {
+        "dataSource": "mainService",
+        "preload": true,
+        "settings": {
+          "operationMode": "Server",
+          "autoExpandSelect": true,
+          "earlyRequests": true
+        }
+      },
+      "upload": {
+        "type": "sap.ui.model.json.JSONModel"
+      }
+    },
+    "rootView": {
+      "viewName": "zbsi.batchsupplierinvoice.view.Upload",
+      "type": "XML",
+      "async": true,
+      "id": "uploadView"
+    },
+    "resources": {
+      "js": [
+        {
+          "uri": "lib/xlsx.full.min.js"
+        }
+      ]
+    },
+    "routing": {
+      "config": {
+        "routerClass": "sap.m.routing.Router",
+        "viewType": "XML",
+        "async": true,
+        "viewPath": "zbsi.batchsupplierinvoice.view",
+        "controlAggregation": "pages",
+        "controlId": "app"
+      },
+      "routes": [
+        {
+          "name": "upload",
+          "pattern": "",
+          "target": ["upload"]
+        }
+      ],
+      "targets": {
+        "upload": {
+          "viewType": "XML",
+          "viewName": "Upload",
+          "viewId": "uploadView"
+        }
+      }
+    }
+  }
+}

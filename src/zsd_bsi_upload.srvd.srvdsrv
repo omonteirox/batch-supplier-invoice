@@ -1,0 +1,5 @@
+@EndUserText.label: 'Batch Supplier Invoice Upload - Service Definition'
+define service ZSD_BSI_UPLOAD {
+  expose ZC_BSI_Upload;
+  expose I_CompanyCode as CompanyCode;
+}

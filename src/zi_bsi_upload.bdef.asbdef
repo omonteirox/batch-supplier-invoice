@@ -1,0 +1,87 @@
+managed implementation in class ZBP_I_BSI_Upload unique;
+strict ( 2 );
+with draft;
+
+define behavior for ZI_BSI_Upload alias Upload
+persistent table zbsi_upload
+draft table zbsi_upload_d
+etag master LocalLastChangedAt
+lock master total etag LastChangedAt
+authorization master ( global )
+{
+  field ( readonly )
+    UploadUuid,
+    Status,
+    Message,
+    SupplierInvoice,
+    FiscalYear,
+    CreatedBy,
+    CreatedAt,
+    LastChangedBy,
+    LastChangedAt,
+    LocalLastChangedAt;
+
+  field ( mandatory )
+    CompanyCode,
+    DocumentDate,
+    PostingDate,
+    GrossAmount,
+    Currency,
+    PurchaseOrder,
+    PoItem,
+    TaxCode;
+
+  create;
+  update;
+  delete;
+
+  draft action Edit;
+  draft action Activate optimized;
+  draft action Discard;
+  draft action Resume;
+  draft determine action Prepare
+  {
+    validation validateMandatoryFields;
+    validation validateAmounts;
+  }
+
+  action ( features : instance ) ExecuteBatch result [1] $self;
+
+  determination setDefaults on modify { create; }
+
+  validation validateMandatoryFields on save
+  {
+    field CompanyCode, DocumentDate, PostingDate, GrossAmount,
+          Currency, PurchaseOrder, PoItem, TaxCode;
+  }
+
+  validation validateAmounts on save
+  {
+    field GrossAmount;
+  }
+
+  mapping for zbsi_upload corresponding
+  {
+    UploadUuid         = upload_uuid;
+    CompanyCode        = company_code;
+    DocumentDate       = document_date;
+    PostingDate        = posting_date;
+    Reference          = reference;
+    InvoicingParty     = invoicing_party;
+    GrossAmount        = gross_amount;
+    Currency           = currency;
+    PurchaseOrder      = purchase_order;
+    PoItem             = po_item;
+    TaxCode            = tax_code;
+    NfCategory         = nf_category;
+    Status             = status;
+    Message            = message;
+    SupplierInvoice    = supplier_invoice;
+    FiscalYear         = fiscal_year;
+    CreatedBy          = created_by;
+    CreatedAt          = created_at;
+    LastChangedBy      = last_changed_by;
+    LastChangedAt      = last_changed_at;
+    LocalLastChangedAt = local_last_changed_at;
+  }
+}
