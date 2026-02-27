@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_SRVD" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <SRVD>
+    <SRVDNAME>ZSD_BSI_UPLOAD</SRVDNAME>
+    <DDLANGUAGE>E</DDLANGUAGE>
+    <DDTEXT>Batch Supplier Invoice Upload - Service Definition</DDTEXT>
+   </SRVD>
+  </asx:values>
+ </asx:abap>
+</abapGit>
