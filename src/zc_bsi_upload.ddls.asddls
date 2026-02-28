@@ -45,6 +45,8 @@ define root view entity ZC_BSI_Upload
       @EndUserText.label: 'Status'
       Status,
 
+      StatusCriticality,
+
       @EndUserText.label: 'Mensagem'
       Message,
 

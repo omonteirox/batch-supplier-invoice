@@ -3,3 +3,4 @@ node_modules/
 *.log
 cds-help/
 .agents/
+help-abap/

@@ -63,8 +63,11 @@ annotate entity ZC_BSI_Upload with
   NfCategory;
 
   @UI: { lineItem:       [{ position: 120, criticality: 'StatusCriticality' }],
-         fieldGroup:     [{ qualifier: 'Result', position: 10 }] }
+         fieldGroup:     [{ qualifier: 'Result', position: 10, criticality: 'StatusCriticality' }] }
   Status;
+
+  @UI.hidden: true
+  StatusCriticality;
 
   @UI: { lineItem:       [{ position: 130 }],
          fieldGroup:     [{ qualifier: 'Result', position: 20 }] }

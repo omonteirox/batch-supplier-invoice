@@ -23,6 +23,11 @@ define root view entity ZI_BSI_Upload
       tax_code             as TaxCode,
       nf_category          as NfCategory,
       status               as Status,
+      case status
+        when 'S' then 3  -- Success (green)
+        when 'E' then 1  -- Error (red)
+        else 0            -- Pending (neutral)
+      end                  as StatusCriticality,
       message              as Message,
       supplier_invoice     as SupplierInvoice,
       fiscal_year          as FiscalYear,
