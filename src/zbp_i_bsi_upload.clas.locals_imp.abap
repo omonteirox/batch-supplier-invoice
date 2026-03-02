@@ -9,7 +9,7 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
 
     CONSTANTS:
       gc_comm_scenario TYPE if_com_management=>ty_cscn_id VALUE 'Z_BSI_SUPLRINVC',
-      gc_outbound_svc  TYPE if_com_management=>ty_cscn_outbound_service_id VALUE 'Z_BSI_SUPLRINVC_REST'.
+      gc_outbound_svc  TYPE if_com_management=>ty_cscn_outb_srv_id VALUE 'Z_BSI_SUPLRINVC_REST'.
 
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
       IMPORTING REQUEST requested_authorizations FOR Upload RESULT result.
@@ -31,7 +31,7 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
 
     METHODS call_supplier_invoice_api
       IMPORTING
-        is_upload        TYPE zi_bsi_upload
+        is_upload        TYPE STRUCTURE FOR READ RESULT zi_bsi_upload\\Upload
       EXPORTING
         ev_status        TYPE c
         ev_message       TYPE string
@@ -46,8 +46,7 @@ CLASS lhc_upload IMPLEMENTATION.
     " Allow all operations - fine-grained auth via DCL
     result = VALUE #( ( %create      = if_abap_behv=>auth-allowed
                         %update      = if_abap_behv=>auth-allowed
-                        %delete      = if_abap_behv=>auth-allowed
-                        %action-ExecuteBatch = if_abap_behv=>auth-allowed ) ).
+                        %delete      = if_abap_behv=>auth-allowed ) ).
   ENDMETHOD.
 
   METHOD get_features.
@@ -282,11 +281,11 @@ CLASS lhc_upload IMPLEMENTATION.
         " 2) Build JSON payload
         " -----------------------------------
         " Date format for OData V2: /Date(<epoch_ms>)/
-        DATA(lv_doc_date_epoch) = cl_abap_tstmp=>utclong_to_tstmp(
+        DATA(lv_doc_date_epoch) = cl_abap_tstmp=>utclong2tstmp(
           utclong = CONV utclong( |{ is_upload-DocumentDate }T000000| ) ).
         DATA(lv_doc_date_ms) = CONV int8( lv_doc_date_epoch ) * 1000.
 
-        DATA(lv_post_date_epoch) = cl_abap_tstmp=>utclong_to_tstmp(
+        DATA(lv_post_date_epoch) = cl_abap_tstmp=>utclong2tstmp(
           utclong = CONV utclong( |{ is_upload-PostingDate }T000000| ) ).
         DATA(lv_post_date_ms) = CONV int8( lv_post_date_epoch ) * 1000.
 
