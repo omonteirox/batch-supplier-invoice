@@ -18,6 +18,7 @@
     <item>/help-abap/</item>
     <item>/template/</item>
     <item>/.gemini/</item>
+    <item>*.cscn.xml</item>
    </IGNORE>
   </DATA>
  </asx:values>

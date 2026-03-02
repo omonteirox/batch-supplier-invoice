@@ -76,10 +76,11 @@ CLASS lhc_upload IMPLEMENTATION.
 
     MODIFY ENTITIES OF zi_bsi_upload IN LOCAL MODE
       ENTITY Upload
-        UPDATE FIELDS ( Status )
+        UPDATE FIELDS ( Status StatusCriticality )
         WITH VALUE #( FOR ls_upload IN lt_uploads
-          ( %tky   = ls_upload-%tky
-            Status = gc_status_pending ) )
+          ( %tky              = ls_upload-%tky
+            Status            = gc_status_pending
+            StatusCriticality = 0 ) )
       REPORTED DATA(lt_reported).
   ENDMETHOD.
 
@@ -221,17 +222,24 @@ CLASS lhc_upload IMPLEMENTATION.
         THEN substring( val = lv_message len = 255 )
         ELSE lv_message ).
 
+      DATA(lv_criticality) = COND int1(
+        WHEN lv_status = gc_status_success THEN 3
+        WHEN lv_status = gc_status_error   THEN 1
+        ELSE 0 ).
+
       APPEND VALUE #(
-        %tky            = ls_upload-%tky
-        Status          = lv_status
-        Message         = lv_msg_text
-        SupplierInvoice = lv_invoice_no
-        FiscalYear      = lv_fiscal_year
+        %tky              = ls_upload-%tky
+        Status            = lv_status
+        StatusCriticality = lv_criticality
+        Message           = lv_msg_text
+        SupplierInvoice   = lv_invoice_no
+        FiscalYear        = lv_fiscal_year
         %control = VALUE #(
-          Status          = if_abap_behv=>mk-on
-          Message         = if_abap_behv=>mk-on
-          SupplierInvoice = if_abap_behv=>mk-on
-          FiscalYear      = if_abap_behv=>mk-on )
+          Status            = if_abap_behv=>mk-on
+          StatusCriticality = if_abap_behv=>mk-on
+          Message           = if_abap_behv=>mk-on
+          SupplierInvoice   = if_abap_behv=>mk-on
+          FiscalYear        = if_abap_behv=>mk-on )
       ) TO lt_update.
     ENDLOOP.
 

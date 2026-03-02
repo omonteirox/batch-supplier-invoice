@@ -12,6 +12,7 @@ authorization master ( global )
   field ( readonly )
     UploadUuid,
     Status,
+    StatusCriticality,
     Message,
     SupplierInvoice,
     FiscalYear,
@@ -75,6 +76,7 @@ authorization master ( global )
     TaxCode            = tax_code;
     NfCategory         = nf_category;
     Status             = status;
+    StatusCriticality   = status_criticality;
     Message            = message;
     SupplierInvoice    = supplier_invoice;
     FiscalYear         = fiscal_year;
