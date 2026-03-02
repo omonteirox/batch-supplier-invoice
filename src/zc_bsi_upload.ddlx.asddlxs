@@ -1,5 +1,11 @@
 @EndUserText.label: 'Batch Supplier Invoice Upload - Metadata Extension'
 @Metadata.layer: #CUSTOMER
+@UI.headerInfo: {
+  typeName: 'Upload de Fatura',
+  typeNamePlural: 'Uploads de Fatura',
+  title: { type: #STANDARD, value: 'Reference' },
+  description: { type: #STANDARD, value: 'CompanyCode' }
+}
 annotate entity ZC_BSI_Upload with
 {
   @UI.facet: [
@@ -15,6 +21,7 @@ annotate entity ZC_BSI_Upload with
   ]
 
   @UI.hidden: true
+  @UI.lineItem: [{ type: #FOR_ACTION, dataAction: 'ExecuteBatch', label: 'Executar Lançamento', position: 10 }]
   UploadUuid;
 
   @UI: { lineItem:       [{ position: 10 }],

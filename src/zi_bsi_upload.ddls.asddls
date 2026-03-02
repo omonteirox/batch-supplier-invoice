@@ -6,6 +6,7 @@
   sizeCategory: #L,
   dataClass: #TRANSACTIONAL
 }
+@ObjectModel.representativeKey: 'UploadUuid'
 define root view entity ZI_BSI_Upload
   as select from zbsi_upload
 {

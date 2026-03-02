@@ -9,8 +9,10 @@ etag master LocalLastChangedAt
 lock master total etag LastChangedAt
 authorization master ( global )
 {
+  field ( readonly, numbering : managed )
+    UploadUuid;
+
   field ( readonly )
-    UploadUuid,
     Status,
     StatusCriticality,
     Message,
