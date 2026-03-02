@@ -15,6 +15,9 @@
     <item>/cds-help/</item>
     <item>/API_SUPPLIERINVOICE_PROCESS_SRV.json</item>
     <item>/webapp/</item>
+    <item>/help-abap/</item>
+    <item>/template/</item>
+    <item>/.gemini/</item>
    </IGNORE>
   </DATA>
  </asx:values>
