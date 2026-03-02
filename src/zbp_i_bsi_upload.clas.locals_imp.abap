@@ -2,6 +2,20 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
 
   PRIVATE SECTION.
 
+    TYPES: BEGIN OF ty_invoice_data,
+             CompanyCode    TYPE c LENGTH 4,
+             DocumentDate   TYPE d,
+             PostingDate    TYPE d,
+             Reference      TYPE c LENGTH 16,
+             InvoicingParty TYPE c LENGTH 10,
+             GrossAmount    TYPE p LENGTH 9 DECIMALS 3,
+             Currency       TYPE c LENGTH 5,
+             PurchaseOrder  TYPE c LENGTH 10,
+             PoItem         TYPE c LENGTH 5,
+             TaxCode        TYPE c LENGTH 2,
+             NfCategory     TYPE c LENGTH 2,
+           END OF ty_invoice_data.
+
     CONSTANTS:
       BEGIN OF gc_status,
         pending TYPE c LENGTH 1 VALUE 'P',
@@ -41,7 +55,7 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
     "! Build the JSON payload for the Supplier Invoice API
     METHODS build_invoice_payload
       IMPORTING
-        is_upload       TYPE STRUCTURE FOR READ RESULT zi_bsi_upload\\Upload
+        is_upload       TYPE ty_invoice_data
       RETURNING
         VALUE(rv_json)  TYPE string.
 
@@ -274,7 +288,7 @@ CLASS lhc_upload IMPLEMENTATION.
       CLEAR: lv_status, lv_message, lv_invoice_no, lv_fiscal_year.
 
       " Build payload and execute API call (separated concerns)
-      DATA(lv_payload) = build_invoice_payload( ls_upload ).
+      DATA(lv_payload) = build_invoice_payload( CORRESPONDING ty_invoice_data( ls_upload ) ).
 
       execute_api_call(
         EXPORTING iv_payload     = lv_payload
