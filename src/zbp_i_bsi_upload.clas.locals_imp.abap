@@ -29,9 +29,23 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS get_features FOR INSTANCE FEATURES
       IMPORTING keys REQUEST requested_features FOR Upload RESULT result.
 
+    TYPES: BEGIN OF ty_upload_data,
+             CompanyCode    TYPE bukrs,
+             DocumentDate   TYPE budat,
+             PostingDate    TYPE budat,
+             Reference      TYPE c LENGTH 16,
+             InvoicingParty TYPE lifnr,
+             GrossAmount    TYPE p LENGTH 9 DECIMALS 3,
+             Currency       TYPE waers,
+             PurchaseOrder  TYPE ebeln,
+             PoItem         TYPE ebelp,
+             TaxCode        TYPE mwskz,
+             NfCategory     TYPE c LENGTH 2,
+           END OF ty_upload_data.
+
     METHODS call_supplier_invoice_api
       IMPORTING
-        is_upload        TYPE STRUCTURE FOR READ RESULT zi_bsi_upload\\Upload
+        is_upload        TYPE ty_upload_data
       EXPORTING
         ev_status        TYPE c
         ev_message       TYPE string
@@ -209,7 +223,7 @@ CLASS lhc_upload IMPLEMENTATION.
 
       call_supplier_invoice_api(
         EXPORTING
-          is_upload      = ls_upload
+          is_upload      = CORRESPONDING ty_upload_data( ls_upload )
         IMPORTING
           ev_status      = lv_status
           ev_message     = lv_message
