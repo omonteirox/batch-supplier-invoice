@@ -56,8 +56,11 @@ sap.ui.define([
         },
 
         onUploadPress: function () {
+            // FIX WARN-01: Stop using private DOM property FUEl.
+            // Getting the input DOM element directly by ID instead of using FUEl
             var oFileUploader = this.oView.byId("fileUploader");
-            var aFiles = oFileUploader.FUEl.files; // Access dom files
+            var oDomRef = document.getElementById(oFileUploader.getId() + "-fu");
+            var aFiles = oDomRef ? oDomRef.files : null;
 
             var sCompanyCode = this.oUploadDialog.getModel("dialog").getProperty("/companyCode");
 
@@ -76,9 +79,9 @@ sap.ui.define([
             this.oUploadDialog.setBusy(true);
 
             if (sFileName.endsWith(".xlsx") || sFileName.endsWith(".xls")) {
-                this._parseExcel(oFile, sCompanyCode);
+                this._parseExcel(oFile, sFileName, sCompanyCode);
             } else if (sFileName.endsWith(".csv")) {
-                this._parseCsv(oFile, sCompanyCode);
+                this._parseCsv(oFile, sFileName, sCompanyCode);
             } else {
                 this.oUploadDialog.setBusy(false);
                 MessageBox.error("Tipo de arquivo não suportado. Use .xlsx ou .csv");
@@ -89,12 +92,12 @@ sap.ui.define([
         /* Internal: Parse Excel & CSV                                  */
         /* =========================================================== */
 
-        _parseExcel: function (oFile, sCompanyCode) {
+        _parseExcel: function (oFile, sFileName, sCompanyCode) {
             var that = this;
 
             if (typeof XLSX === "undefined") {
                 this.oUploadDialog.setBusy(false);
-                MessageBox.error("Biblioteca SheetJS (xlsx) não encontrada.");
+                MessageBox.error("Biblioteca SheetJS (xlsx) não encontrada. Verifique o manifest.json.");
                 return;
             }
 
@@ -103,178 +106,79 @@ sap.ui.define([
                 try {
                     var oWorkbook = XLSX.read(e.target.result, { type: "binary" });
                     var sSheetName = oWorkbook.SheetNames[0];
-                    var aData = XLSX.utils.sheet_to_json(oWorkbook.Sheets[sSheetName], {
-                        raw: false,
-                        defval: ""
-                    });
 
-                    if (!aData || aData.length === 0) {
+                    // Convert sheet to CSV - backend will do the heavy lifting parsing the data
+                    // Use ; as our standard backend delimiter for safety across locales
+                    var sCsvData = XLSX.utils.sheet_to_csv(oWorkbook.Sheets[sSheetName], { FS: ";" });
+
+                    if (!sCsvData) {
                         that.oUploadDialog.setBusy(false);
                         MessageBox.error("O arquivo está vazio ou não possui dados válidos.");
                         return;
                     }
 
-                    var aItems = that._mapExcelData(aData);
-                    that._createDraftEntities(aItems, sCompanyCode);
+                    that._callBackendAction(sCsvData, sFileName, sCompanyCode);
 
                 } catch (oError) {
                     that.oUploadDialog.setBusy(false);
-                    MessageBox.error("Erro ao processar o arquivo: " + oError.message);
+                    MessageBox.error("Erro ao converter o arquivo Excel: " + oError.message);
                 }
             };
             oReader.readAsBinaryString(oFile);
         },
 
-        _parseCsv: function (oFile, sCompanyCode) {
+        _parseCsv: function (oFile, sFileName, sCompanyCode) {
             var that = this;
             var oReader = new FileReader();
 
             oReader.onload = function (e) {
                 try {
                     var sContent = e.target.result;
-                    var aLines = sContent.split(/\r?\n/).filter(function (s) { return s.trim(); });
-
-                    if (aLines.length < 2) {
+                    if (!sContent || sContent.trim().length === 0) {
                         that.oUploadDialog.setBusy(false);
-                        MessageBox.error("O arquivo está vazio ou não possui dados válidos.");
+                        MessageBox.error("O arquivo CSV está vazio.");
                         return;
                     }
-
-                    var sDelimiter = aLines[0].indexOf(";") >= 0 ? ";" : ",";
-                    var aHeaders = aLines[0].split(sDelimiter).map(function (h) {
-                        return h.trim().toUpperCase().replace(/"/g, "");
-                    });
-
-                    var aItems = [];
-                    for (var i = 1; i < aLines.length; i++) {
-                        var aValues = aLines[i].split(sDelimiter).map(function (v) {
-                            return v.trim().replace(/"/g, "");
-                        });
-
-                        var oRow = {};
-                        aHeaders.forEach(function (sHeader, idx) {
-                            oRow[sHeader] = aValues[idx] || "";
-                        });
-
-                        aItems.push(that._mapRowToItem(oRow, i));
-                    }
-
-                    that._createDraftEntities(aItems, sCompanyCode);
-
+                    that._callBackendAction(sContent, sFileName, sCompanyCode);
                 } catch (oError) {
                     that.oUploadDialog.setBusy(false);
-                    MessageBox.error("Erro ao processar o arquivo: " + oError.message);
+                    MessageBox.error("Erro ao ler o arquivo CSV: " + oError.message);
                 }
             };
             oReader.readAsText(oFile, "UTF-8");
         },
 
-        _mapExcelData: function (aRawData) {
-            var that = this;
-            return aRawData.map(function (oRow, iIndex) {
-                var oNorm = {};
-                Object.keys(oRow).forEach(function (k) {
-                    oNorm[k.toUpperCase().trim()] = (oRow[k] || "").toString().trim();
-                });
-                return that._mapRowToItem(oNorm, iIndex + 1);
-            });
-        },
-
-        _mapRowToItem: function (oRow, iLine) {
-            return {
-                DocumentDate: this._toEdmDate(this._parseDate(oRow["DATA_FATURA"] || oRow["DOCUMENTDATE"] || "")),
-                PostingDate: this._toEdmDate(this._parseDate(oRow["DATA_LANCAMENTO"] || oRow["POSTINGDATE"] || "")),
-                Reference: oRow["REFERENCIA"] || oRow["REFERENCE"] || "",
-                InvoicingParty: oRow["FORNECEDOR"] || oRow["INVOICINGPARTY"] || "",
-                GrossAmount: this._parseAmount(oRow["MONTANTE"] || oRow["GROSSAMOUNT"] || "0"),
-                Currency: (oRow["MOEDA"] || oRow["CURRENCY"] || "BRL").toUpperCase(),
-                PurchaseOrder: oRow["PEDIDO"] || oRow["PURCHASEORDER"] || "",
-                PoItem: this._padPoItem(oRow["ITEM_PEDIDO"] || oRow["POITEM"] || ""),
-                TaxCode: (oRow["CODIGO_IMPOSTO"] || oRow["TAXCODE"] || "").toUpperCase(),
-                NfCategory: oRow["CATEGORIA_NF"] || oRow["NFCATEGORY"] || ""
-            };
-        },
-
         /* =========================================================== */
-        /* Internal: Creation of Draft Entities directly in Fiori List */
+        /* Internal: RAP Factory Action Call                           */
         /* =========================================================== */
 
-        _createDraftEntities: function (aItems, sCompanyCode) {
+        _callBackendAction: function (sCsvContent, sFileName, sCompanyCode) {
             var that = this;
 
-            // Get OData V4 Model List Binding representing the Table data
+            // Get OData V4 Model
+            var oModel = this.oView.getModel();
+
+            // Get OData context bound to the list report inner table
             var oTable = this.oView.byId("zbsi.batchsupplierinvoice::ZC_BSI_UploadList--fe::table::ZC_BSI_Upload::LineItem-innerTable");
             var oListBinding = oTable.getBinding("items");
 
-            var oModel = oListBinding.getModel();
-            var oExtensionAPI = this.extensionAPI;
+            // Use standard OData V4 static factory action invocation naming
+            // Path is usually <ModelNamespace>.<ActionName> on the entity collection
+            var oActionContext = oModel.bindContext("com.sap.gateway.srvd.zsd_bsi_upload.v0001.ImportFromFile(...)", oListBinding.getHeaderContext());
 
-            // Prevent UI refreshing concurrently
-            oListBinding.suspend();
+            oActionContext.setParameter("FileContent", sCsvContent);
+            oActionContext.setParameter("FileName", sFileName);
+            oActionContext.setParameter("CompanyCode", sCompanyCode);
 
-            // Create each entity as Draft Context in the backend
-            aItems.forEach(function (oItem) {
-                oItem.CompanyCode = sCompanyCode;
-                oListBinding.create(oItem, true); // true = skip inactive validation (creates as Draft)
-            });
-
-            // Resume and submit the batch of requests generated by list.bind.create()
-            oListBinding.resume();
-
-            oModel.submitBatch(oModel.getUpdateGroupId()).then(function () {
+            oActionContext.execute().then(function () {
                 that.oUploadDialog.setBusy(false);
                 that.oUploadDialog.close();
-                oExtensionAPI.refresh(); // Refresh List Report table
-                MessageToast.show(aItems.length + " faturas preparadas (Draft). Valide-as e clique em 'Executar Lançamento'.");
+                if (that.extensionAPI) that.extensionAPI.refresh();
+                MessageToast.show("Importação RAP concluída com sucesso. Valide as pendências na lista.");
             }).catch(function (oError) {
                 that.oUploadDialog.setBusy(false);
-                MessageBox.error("Erro na comunicação com o servidor ao salvar os rascunhos.");
-                console.error(oError);
+                MessageBox.error(oError.message || "Erro na comunicação com o backend durante a importação.");
             });
-        },
-
-        /* =========================================================== */
-        /* Internal: Parsing Utilities                                  */
-        /* =========================================================== */
-
-        _parseDate: function (sDate) {
-            if (!sDate) return "";
-            var aParts = sDate.split(/[.\/\-]/);
-            if (aParts.length === 3) {
-                var sDay = aParts[0].padStart(2, "0");
-                var sMonth = aParts[1].padStart(2, "0");
-                var sYear = aParts[2];
-                if (sYear.length === 2) {
-                    sYear = "20" + sYear;
-                }
-                return sYear + "-" + sMonth + "-" + sDay;
-            }
-            if (/^\d{4}-\d{2}-\d{2}$/.test(sDate)) {
-                return sDate;
-            }
-            if (/^\d{8}$/.test(sDate)) {
-                return sDate.substring(0, 4) + "-" + sDate.substring(4, 6) + "-" + sDate.substring(6, 8);
-            }
-            return sDate;
-        },
-
-        _parseAmount: function (sAmount) {
-            if (!sAmount) return "0";
-            var sClean = sAmount.toString()
-                .replace(/\s/g, "")
-                .replace(/\./g, "")
-                .replace(",", ".");
-            return isNaN(parseFloat(sClean)) ? "0" : sClean;
-        },
-
-        _padPoItem: function (sItem) {
-            if (!sItem) return "";
-            var sClean = sItem.replace(/\D/g, "");
-            return sClean.padStart(5, "0");
-        },
-
-        _toEdmDate: function (sDate) {
-            return sDate || null;
         }
     };
 });

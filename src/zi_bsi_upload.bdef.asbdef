@@ -28,6 +28,7 @@ authorization master ( global )
     CompanyCode,
     DocumentDate,
     PostingDate,
+    InvoicingParty,
     GrossAmount,
     Currency,
     PurchaseOrder,
@@ -50,12 +51,14 @@ authorization master ( global )
 
   action ( features : instance ) ExecuteBatch result [1] $self;
 
+  static factory action ImportFromFile parameter ZA_BSI_FILE_UPLOAD [*];
+
   determination setDefaults on modify { create; }
 
   validation validateMandatoryFields on save
   {
-    field CompanyCode, DocumentDate, PostingDate, GrossAmount,
-          Currency, PurchaseOrder, PoItem, TaxCode;
+    field CompanyCode, DocumentDate, PostingDate, InvoicingParty,
+          GrossAmount, Currency, PurchaseOrder, PoItem, TaxCode;
   }
 
   validation validateAmounts on save

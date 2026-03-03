@@ -15,4 +15,5 @@ define behavior for ZC_BSI_Upload alias Upload
   use action Prepare;
 
   use action ExecuteBatch;
+  use action ImportFromFile;
 }

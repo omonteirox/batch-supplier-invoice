@@ -92,11 +92,7 @@
       }
     },
     "resources": {
-      "js": [
-        {
-          "uri": "lib/xlsx.full.min.js"
-        }
-      ]
+      "js": []
     },
     "routing": {
       "config": {},
@@ -138,7 +134,7 @@
                       "requiresSelection": false,
                       "position": {
                         "placement": "Before",
-                         "anchor": "DataFieldForAction::ExecuteBatch"
+                        "anchor": "DataFieldForAction::ExecuteBatch"
                       }
                     }
                   }

@@ -30,6 +30,20 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS ExecuteBatch FOR MODIFY
       IMPORTING keys FOR ACTION Upload~ExecuteBatch RESULT result.
 
+    "! Import entities from CSV file content (called by RAP static factory action)
+    METHODS ImportFromFile FOR MODIFY
+      IMPORTING keys FOR ACTION Upload~ImportFromFile.
+
+    "! Parse date string in multiple formats (DD/MM/YYYY, DD.MM.YYYY, YYYY-MM-DD, YYYYMMDD)
+    METHODS parse_csv_date
+      IMPORTING iv_raw        TYPE string
+      RETURNING VALUE(rv_date) TYPE d.
+
+    "! Parse amount string handling Brazilian format (1.234,56 → 1234.56)
+    METHODS parse_csv_amount
+      IMPORTING iv_raw          TYPE string
+      RETURNING VALUE(rv_amount) TYPE p LENGTH 16 DECIMALS 2.
+
     "! Execute a single invoice creation via OData V4 Client Proxy
     "!
     "! @parameter io_client_proxy | Proxy instance (reused across loop iterations)
@@ -43,8 +57,8 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
                 is_upload       TYPE zi_bsi_upload
       EXPORTING ev_status       TYPE c
                 ev_message      TYPE string
-                ev_invoice_no   TYPE c
-                ev_fiscal_year  TYPE c.
+                ev_invoice_no   TYPE c LENGTH 10
+                ev_fiscal_year  TYPE c LENGTH 4.
 
 ENDCLASS.
 
@@ -151,6 +165,15 @@ CLASS lhc_upload IMPLEMENTATION.
                         %element-Currency = if_abap_behv=>mk-on ) TO reported-upload.
       ENDIF.
 
+      IF ls_upload-InvoicingParty IS INITIAL.
+        APPEND VALUE #( %tky = ls_upload-%tky ) TO failed-upload.
+        APPEND VALUE #( %tky = ls_upload-%tky
+                        %msg = new_message_with_text(
+                           severity = if_abap_behv_message=>severity-error
+                           text     = 'Fornecedor é obrigatório' )
+                        %element-InvoicingParty = if_abap_behv=>mk-on ) TO reported-upload.
+      ENDIF.
+
       IF ls_upload-PurchaseOrder IS INITIAL.
         APPEND VALUE #( %tky = ls_upload-%tky ) TO failed-upload.
         APPEND VALUE #( %tky = ls_upload-%tky
@@ -243,7 +266,8 @@ CLASS lhc_upload IMPLEMENTATION.
             io_http_client             = lo_http_client
             iv_relative_service_root   = '/sap/opu/odata/sap/API_SUPPLIERINVOICE_PROCESS_SRV' ).
 
-      CATCH cx_http_dest_provider_error INTO DATA(lx_dest_init).
+      CATCH cx_http_dest_provider_error
+            cx_web_http_client_error INTO DATA(lx_init).
         " If proxy instantiation fails, mark ALL records as error and return
         LOOP AT lt_uploads INTO DATA(ls_err).
           IF ls_err-Status = gc_status_success.
@@ -253,7 +277,7 @@ CLASS lhc_upload IMPLEMENTATION.
             %tky              = ls_err-%tky
             Status            = gc_status_error
             StatusCriticality = gc_crit_negative
-            Message           = |Erro destino: { lx_dest_init->get_text( ) }|
+            Message           = |Erro conexão: { lx_init->get_text( ) }|
             %control = VALUE #(
               Status            = if_abap_behv=>mk-on
               StatusCriticality = if_abap_behv=>mk-on
@@ -276,40 +300,6 @@ CLASS lhc_upload IMPLEMENTATION.
         result = VALUE #( FOR ls_r IN lt_err_result
           ( %tky   = ls_r-%tky
             %param = ls_r ) ).
-        RETURN.
-
-      CATCH cx_web_http_client_error INTO DATA(lx_http_init).
-        " Same early-return pattern for HTTP client errors
-        LOOP AT lt_uploads INTO DATA(ls_err2).
-          IF ls_err2-Status = gc_status_success.
-            CONTINUE.
-          ENDIF.
-          APPEND VALUE #(
-            %tky              = ls_err2-%tky
-            Status            = gc_status_error
-            StatusCriticality = gc_crit_negative
-            Message           = |Erro HTTP: { lx_http_init->get_text( ) }|
-            %control = VALUE #(
-              Status            = if_abap_behv=>mk-on
-              StatusCriticality = if_abap_behv=>mk-on
-              Message           = if_abap_behv=>mk-on )
-          ) TO lt_update.
-        ENDLOOP.
-
-        MODIFY ENTITIES OF zi_bsi_upload IN LOCAL MODE
-          ENTITY Upload
-            UPDATE FROM lt_update
-          REPORTED DATA(lt_err_reported2).
-
-        READ ENTITIES OF zi_bsi_upload IN LOCAL MODE
-          ENTITY Upload
-            FIELDS ( Status StatusCriticality Message SupplierInvoice FiscalYear )
-            WITH CORRESPONDING #( keys )
-          RESULT DATA(lt_err_result2).
-
-        result = VALUE #( FOR ls_r2 IN lt_err_result2
-          ( %tky   = ls_r2-%tky
-            %param = ls_r2 ) ).
         RETURN.
     ENDTRY.
 
@@ -467,15 +457,238 @@ CLASS lhc_upload IMPLEMENTATION.
       CATCH /iwbep/cx_gateway INTO DATA(lx_gateway).
         " OData gateway/business logic errors
         ev_message = |Erro Gateway: { lx_gateway->get_text( ) }|.
-
-      CATCH cx_http_dest_provider_error INTO DATA(lx_dest).
-        " Communication arrangement destination errors
-        ev_message = |Erro destino: { lx_dest->get_text( ) }|.
-
-      CATCH cx_web_http_client_error INTO DATA(lx_http).
-        " HTTP client transport errors
-        ev_message = |Erro HTTP: { lx_http->get_text( ) }|.
     ENDTRY.
   ENDMETHOD.
+
+
+  METHOD ImportFromFile.
+    " -------------------------------------------------------------------
+    " Static Factory Action: Import CSV → Create Upload entities via EML
+    " Moves ALL business logic (parsing, mapping, validation) to ABAP.
+    " Frontend only reads the file and sends CSV text.
+    " -------------------------------------------------------------------
+    DATA(ls_param) = keys[ 1 ]-%param.
+    DATA(lv_csv)     = ls_param-FileContent.
+    DATA(lv_company) = ls_param-CompanyCode.
+
+    " --- 1) Validate inputs -------------------------------------------------
+    IF lv_csv IS INITIAL.
+      APPEND VALUE #( %msg = new_message_with_text(
+        severity = if_abap_behv_message=>severity-error
+        text     = 'Conteúdo do arquivo está vazio' ) ) TO reported-upload.
+      RETURN.
+    ENDIF.
+    IF lv_company IS INITIAL.
+      APPEND VALUE #( %msg = new_message_with_text(
+        severity = if_abap_behv_message=>severity-error
+        text     = 'Empresa é obrigatória' ) ) TO reported-upload.
+      RETURN.
+    ENDIF.
+
+    " --- 2) Normalize line endings (CRLF / CR → LF) ------------------------
+    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>cr_lf
+      IN lv_csv WITH cl_abap_char_utilities=>newline.
+    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>cr
+      IN lv_csv WITH cl_abap_char_utilities=>newline.
+
+    SPLIT lv_csv AT cl_abap_char_utilities=>newline INTO TABLE DATA(lt_lines).
+    DELETE lt_lines WHERE table_line IS INITIAL.
+
+    IF lines( lt_lines ) < 2.
+      APPEND VALUE #( %msg = new_message_with_text(
+        severity = if_abap_behv_message=>severity-error
+        text     = 'Arquivo precisa ter cabeçalho + pelo menos 1 linha de dados' ) ) TO reported-upload.
+      RETURN.
+    ENDIF.
+
+    " --- 3) Parse header row & detect delimiter -----------------------------
+    DATA(lv_header_line) = lt_lines[ 1 ].
+    DELETE lt_lines INDEX 1.
+
+    DATA(lv_delim) = COND string(
+      WHEN find( val = lv_header_line sub = ';' ) >= 0 THEN `;`
+      ELSE `,` ).
+
+    SPLIT lv_header_line AT lv_delim INTO TABLE DATA(lt_headers).
+
+    " Normalize headers: uppercase, trim, remove quotes
+    LOOP AT lt_headers ASSIGNING FIELD-SYMBOL(<h>).
+      REPLACE ALL OCCURRENCES OF '"' IN <h> WITH ``.
+      <h> = to_upper( condense( <h> ) ).
+    ENDLOOP.
+
+    " --- 4) Map header positions (supports PT-BR and EN names) --------------
+    DATA: lv_col_docdate   TYPE i VALUE 0,
+          lv_col_postdate  TYPE i VALUE 0,
+          lv_col_reference TYPE i VALUE 0,
+          lv_col_supplier  TYPE i VALUE 0,
+          lv_col_amount    TYPE i VALUE 0,
+          lv_col_currency  TYPE i VALUE 0,
+          lv_col_po        TYPE i VALUE 0,
+          lv_col_poitem    TYPE i VALUE 0,
+          lv_col_taxcode   TYPE i VALUE 0,
+          lv_col_nfcat     TYPE i VALUE 0.
+
+    LOOP AT lt_headers INTO DATA(lv_hdr).
+      DATA(lv_idx) = sy-tabix.
+      CASE lv_hdr.
+        WHEN 'DATA_FATURA'      OR 'DOCUMENTDATE'.      lv_col_docdate  = lv_idx.
+        WHEN 'DATA_LANCAMENTO'  OR 'POSTINGDATE'.       lv_col_postdate = lv_idx.
+        WHEN 'REFERENCIA'       OR 'REFERENCE'.         lv_col_reference = lv_idx.
+        WHEN 'FORNECEDOR'       OR 'INVOICINGPARTY'.    lv_col_supplier = lv_idx.
+        WHEN 'MONTANTE'         OR 'GROSSAMOUNT'.       lv_col_amount   = lv_idx.
+        WHEN 'MOEDA'            OR 'CURRENCY'.          lv_col_currency = lv_idx.
+        WHEN 'PEDIDO'           OR 'PURCHASEORDER'.     lv_col_po       = lv_idx.
+        WHEN 'ITEM_PEDIDO'      OR 'POITEM'.            lv_col_poitem   = lv_idx.
+        WHEN 'CODIGO_IMPOSTO'   OR 'TAXCODE'.           lv_col_taxcode  = lv_idx.
+        WHEN 'CATEGORIA_NF'     OR 'NFCATEGORY'.        lv_col_nfcat    = lv_idx.
+      ENDCASE.
+    ENDLOOP.
+
+    " --- 5) Parse data rows → build CREATE table ----------------------------
+    DATA lt_create TYPE TABLE FOR CREATE zi_bsi_upload\\Upload.
+    DATA lv_cid TYPE i VALUE 0.
+
+    LOOP AT lt_lines INTO DATA(lv_line).
+      SPLIT lv_line AT lv_delim INTO TABLE DATA(lt_vals).
+
+      " Strip quotes from each value
+      LOOP AT lt_vals ASSIGNING FIELD-SYMBOL(<v>).
+        REPLACE ALL OCCURRENCES OF '"' IN <v> WITH ``.
+        <v> = condense( <v> ).
+      ENDLOOP.
+
+      " Helper macro to read value by column index (returns '' if missing)
+      DATA(lv_docdate_raw)  = COND string( WHEN lv_col_docdate  > 0 THEN VALUE #( lt_vals[ lv_col_docdate ] OPTIONAL )  ELSE `` ).
+      DATA(lv_postdate_raw) = COND string( WHEN lv_col_postdate > 0 THEN VALUE #( lt_vals[ lv_col_postdate ] OPTIONAL ) ELSE `` ).
+      DATA(lv_reference)    = COND string( WHEN lv_col_reference > 0 THEN VALUE #( lt_vals[ lv_col_reference ] OPTIONAL ) ELSE `` ).
+      DATA(lv_supplier)     = COND string( WHEN lv_col_supplier > 0 THEN VALUE #( lt_vals[ lv_col_supplier ] OPTIONAL ) ELSE `` ).
+      DATA(lv_amount_raw)   = COND string( WHEN lv_col_amount  > 0 THEN VALUE #( lt_vals[ lv_col_amount ] OPTIONAL )  ELSE `0` ).
+      DATA(lv_currency)     = COND string( WHEN lv_col_currency > 0 THEN VALUE #( lt_vals[ lv_col_currency ] OPTIONAL ) ELSE `BRL` ).
+      DATA(lv_po)           = COND string( WHEN lv_col_po      > 0 THEN VALUE #( lt_vals[ lv_col_po ] OPTIONAL )      ELSE `` ).
+      DATA(lv_poitem_raw)   = COND string( WHEN lv_col_poitem  > 0 THEN VALUE #( lt_vals[ lv_col_poitem ] OPTIONAL )  ELSE `` ).
+      DATA(lv_taxcode)      = COND string( WHEN lv_col_taxcode > 0 THEN VALUE #( lt_vals[ lv_col_taxcode ] OPTIONAL ) ELSE `` ).
+      DATA(lv_nfcat)        = COND string( WHEN lv_col_nfcat   > 0 THEN VALUE #( lt_vals[ lv_col_nfcat ] OPTIONAL )   ELSE `` ).
+
+      " Parse typed values
+      DATA(lv_docdate)  = parse_csv_date( lv_docdate_raw ).
+      DATA(lv_postdate) = parse_csv_date( lv_postdate_raw ).
+      DATA(lv_amount)   = parse_csv_amount( lv_amount_raw ).
+
+      " Pad PO Item to 5 digits
+      DATA(lv_poitem_clean) = condense( lv_poitem_raw ).
+      REPLACE ALL OCCURRENCES OF REGEX '[^0-9]' IN lv_poitem_clean WITH ``.
+      IF strlen( lv_poitem_clean ) > 0 AND strlen( lv_poitem_clean ) < 5.
+        lv_poitem_clean = |{ lv_poitem_clean ALPHA = IN WIDTH = 5 }|.
+      ENDIF.
+
+      lv_cid += 1.
+
+      APPEND VALUE #(
+        %cid           = |CSV{ lv_cid }|
+        CompanyCode    = lv_company
+        DocumentDate   = lv_docdate
+        PostingDate    = lv_postdate
+        Reference      = lv_reference
+        InvoicingParty = lv_supplier
+        GrossAmount    = lv_amount
+        Currency       = to_upper( lv_currency )
+        PurchaseOrder  = lv_po
+        PoItem         = lv_poitem_clean
+        TaxCode        = to_upper( lv_taxcode )
+        NfCategory     = lv_nfcat
+        %control = VALUE #(
+          CompanyCode    = if_abap_behv=>mk-on
+          DocumentDate   = if_abap_behv=>mk-on
+          PostingDate    = if_abap_behv=>mk-on
+          Reference      = if_abap_behv=>mk-on
+          InvoicingParty = if_abap_behv=>mk-on
+          GrossAmount    = if_abap_behv=>mk-on
+          Currency       = if_abap_behv=>mk-on
+          PurchaseOrder  = if_abap_behv=>mk-on
+          PoItem         = if_abap_behv=>mk-on
+          TaxCode        = if_abap_behv=>mk-on
+          NfCategory     = if_abap_behv=>mk-on )
+      ) TO lt_create.
+    ENDLOOP.
+
+    " --- 6) Create all entities via EML -------------------------------------
+    MODIFY ENTITIES OF zi_bsi_upload IN LOCAL MODE
+      ENTITY Upload
+        CREATE SET FIELDS WITH lt_create
+      MAPPED mapped
+      FAILED failed
+      REPORTED reported.
+  ENDMETHOD.
+
+
+  METHOD parse_csv_date.
+    " Parse date string supporting multiple formats:
+    " DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY, YYYY-MM-DD, YYYYMMDD
+    DATA(lv_clean) = condense( iv_raw ).
+    IF lv_clean IS INITIAL.
+      CLEAR rv_date.
+      RETURN.
+    ENDIF.
+
+    " Try YYYYMMDD (8 digits)
+    IF strlen( lv_clean ) = 8 AND lv_clean CO '0123456789'.
+      rv_date = lv_clean.
+      RETURN.
+    ENDIF.
+
+    " Try YYYY-MM-DD
+    IF strlen( lv_clean ) >= 10 AND lv_clean+4(1) = '-' AND lv_clean+7(1) = '-'.
+      CONCATENATE lv_clean+0(4) lv_clean+5(2) lv_clean+8(2) INTO DATA(lv_iso).
+      rv_date = lv_iso.
+      RETURN.
+    ENDIF.
+
+    " Try DD/MM/YYYY or DD.MM.YYYY or DD-MM-YYYY
+    SPLIT lv_clean AT '/' INTO TABLE DATA(lt_parts).
+    IF lines( lt_parts ) <> 3.
+      SPLIT lv_clean AT '.' INTO TABLE lt_parts.
+    ENDIF.
+    IF lines( lt_parts ) <> 3.
+      SPLIT lv_clean AT '-' INTO TABLE lt_parts.
+    ENDIF.
+
+    IF lines( lt_parts ) = 3.
+      DATA(lv_day)   = lt_parts[ 1 ].
+      DATA(lv_month) = lt_parts[ 2 ].
+      DATA(lv_year)  = lt_parts[ 3 ].
+      IF strlen( lv_year ) = 2.
+        lv_year = |20{ lv_year }|.
+      ENDIF.
+      CONCATENATE lv_year lv_month+0(2) lv_day+0(2) INTO DATA(lv_dmy).
+      rv_date = lv_dmy.
+      RETURN.
+    ENDIF.
+
+    " Fallback: try direct assignment
+    rv_date = lv_clean.
+  ENDMETHOD.
+
+
+  METHOD parse_csv_amount.
+    " Parse amount supporting Brazilian format: 1.234,56 → 1234.56
+    DATA(lv_clean) = condense( iv_raw ).
+    IF lv_clean IS INITIAL.
+      rv_amount = 0.
+      RETURN.
+    ENDIF.
+
+    " Remove thousand separators (dots) and convert comma → dot
+    REPLACE ALL OCCURRENCES OF '.' IN lv_clean WITH ``.
+    REPLACE ALL OCCURRENCES OF ',' IN lv_clean WITH '.'.
+    CONDENSE lv_clean NO-GAPS.
+
+    TRY.
+        rv_amount = lv_clean.
+      CATCH cx_sy_conversion_no_number.
+        rv_amount = 0.
+    ENDTRY.
+  ENDMETHOD.
+
 
 ENDCLASS.
