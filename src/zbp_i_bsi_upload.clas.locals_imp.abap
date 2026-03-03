@@ -1,24 +1,30 @@
 CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
 
   PRIVATE SECTION.
+    TYPES: BEGIN OF ty_invoice_data,
+             CompanyCode    TYPE c LENGTH 4,
+             DocumentDate   TYPE d,
+             PostingDate    TYPE d,
+             Reference      TYPE c LENGTH 16,
+             InvoicingParty TYPE c LENGTH 10,
+             GrossAmount    TYPE p LENGTH 9 DECIMALS 3,
+             Currency       TYPE c LENGTH 5,
+             PurchaseOrder  TYPE c LENGTH 10,
+             PoItem         TYPE c LENGTH 5,
+             TaxCode        TYPE c LENGTH 2,
+             NfCategory     TYPE c LENGTH 2,
+           END OF ty_invoice_data.
 
-    CONSTANTS:
-      BEGIN OF gc_status,
-        pending TYPE c LENGTH 1 VALUE 'P',
-        success TYPE c LENGTH 1 VALUE 'S',
-        error   TYPE c LENGTH 1 VALUE 'E',
-      END OF gc_status.
+    CONSTANTS gc_status_pending TYPE c LENGTH 1                             VALUE 'P'.
+    CONSTANTS gc_status_success TYPE c LENGTH 1                             VALUE 'S'.
+    CONSTANTS gc_status_error   TYPE c LENGTH 1                             VALUE 'E'.
 
-    CONSTANTS:
-      BEGIN OF gc_criticality,
-        neutral  TYPE int1 VALUE 0,
-        negative TYPE int1 VALUE 1,
-        positive TYPE int1 VALUE 3,
-      END OF gc_criticality.
+    CONSTANTS gc_crit_neutral   TYPE int1                                   VALUE 0.
+    CONSTANTS gc_crit_negative  TYPE int1                                   VALUE 1.
+    CONSTANTS gc_crit_positive  TYPE int1                                   VALUE 3.
 
-    CONSTANTS:
-      gc_comm_scenario TYPE if_com_management=>ty_cscn_id VALUE 'Z_BSI_SUPLRINVC',
-      gc_outbound_svc  TYPE if_com_management=>ty_cscn_outb_srv_id VALUE 'Z_BSI_SUPLRINVC_REST'.
+    CONSTANTS gc_comm_scenario  TYPE if_com_management=>ty_cscn_id          VALUE 'Z_BSI_SUPLRINVC'.
+    CONSTANTS gc_outbound_svc   TYPE if_com_management=>ty_cscn_outb_srv_id VALUE 'Z_BSI_SUPLRINVC_REST'.
 
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
       IMPORTING REQUEST requested_authorizations FOR Upload RESULT result.
@@ -39,39 +45,50 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING keys FOR ACTION Upload~ExecuteBatch RESULT result.
 
     "! Build the JSON payload for the Supplier Invoice API
+    "!
+    "! @parameter is_upload |
+    "! @parameter rv_json |
     METHODS build_invoice_payload
-      IMPORTING
-        is_upload       TYPE STRUCTURE FOR READ RESULT zi_bsi_upload\\Upload
-      RETURNING
-        VALUE(rv_json)  TYPE string.
+      IMPORTING is_upload      TYPE ty_invoice_data
+      RETURNING VALUE(rv_json) TYPE string.
 
     "! Parse the API response JSON and extract invoice data
+    "!
+    "! @parameter iv_response |
+    "! @parameter iv_http_status |
+    "! @parameter ev_status |
+    "! @parameter ev_message |
+    "! @parameter ev_invoice_no |
+    "! @parameter ev_fiscal_year |
     METHODS parse_api_response
-      IMPORTING
-        iv_response     TYPE string
-        iv_http_status  TYPE i
-      EXPORTING
-        ev_status       TYPE c
-        ev_message      TYPE string
-        ev_invoice_no   TYPE c
-        ev_fiscal_year  TYPE c.
+      IMPORTING iv_response    TYPE string
+                iv_http_status TYPE i
+      EXPORTING ev_status      TYPE c
+                ev_message     TYPE string
+                ev_invoice_no  TYPE c
+                ev_fiscal_year TYPE c.
 
     "! Convert ABAP date to OData V2 epoch format: /Date(<epoch_ms>)/
+    "!
+    "! @parameter iv_date |
+    "! @parameter rv_odata_dt |
     METHODS convert_date_to_odata
-      IMPORTING
-        iv_date            TYPE d
-      RETURNING
-        VALUE(rv_odata_dt) TYPE string.
+      IMPORTING iv_date            TYPE d
+      RETURNING VALUE(rv_odata_dt) TYPE string.
 
     "! Execute the HTTP call to the Supplier Invoice API
+    "!
+    "! @parameter iv_payload |
+    "! @parameter ev_status |
+    "! @parameter ev_message |
+    "! @parameter ev_invoice_no |
+    "! @parameter ev_fiscal_year |
     METHODS execute_api_call
-      IMPORTING
-        iv_payload      TYPE string
-      EXPORTING
-        ev_status       TYPE c
-        ev_message      TYPE string
-        ev_invoice_no   TYPE c
-        ev_fiscal_year  TYPE c.
+      IMPORTING iv_payload     TYPE string
+      EXPORTING ev_status      TYPE c
+                ev_message     TYPE string
+                ev_invoice_no  TYPE c
+                ev_fiscal_year TYPE c.
 
 ENDCLASS.
 
@@ -79,9 +96,9 @@ CLASS lhc_upload IMPLEMENTATION.
 
   METHOD get_global_authorizations.
     " Allow all operations — fine-grained auth controlled via DCL
-    result = VALUE #( ( %create = if_abap_behv=>auth-allowed
-                        %update = if_abap_behv=>auth-allowed
-                        %delete = if_abap_behv=>auth-allowed ) ).
+    result = VALUE #( %create = if_abap_behv=>auth-allowed
+                      %update = if_abap_behv=>auth-allowed
+                      %delete = if_abap_behv=>auth-allowed ).
   ENDMETHOD.
 
 
@@ -96,7 +113,7 @@ CLASS lhc_upload IMPLEMENTATION.
     result = VALUE #( FOR ls_upload IN lt_uploads
       ( %tky = ls_upload-%tky
         %action-ExecuteBatch = COND #(
-          WHEN ls_upload-Status = gc_status-pending
+          WHEN ls_upload-Status = gc_status_pending
             OR ls_upload-Status IS INITIAL
           THEN if_abap_behv=>fc-o-enabled
           ELSE if_abap_behv=>fc-o-disabled ) ) ).
@@ -115,8 +132,8 @@ CLASS lhc_upload IMPLEMENTATION.
         UPDATE FIELDS ( Status StatusCriticality )
         WITH VALUE #( FOR ls_upload IN lt_uploads
           ( %tky              = ls_upload-%tky
-            Status            = gc_status-pending
-            StatusCriticality = gc_criticality-neutral ) )
+            Status            = gc_status_pending
+            StatusCriticality = gc_crit_neutral ) )
       REPORTED DATA(lt_reported).
   ENDMETHOD.
 
@@ -129,25 +146,7 @@ CLASS lhc_upload IMPLEMENTATION.
         WITH CORRESPONDING #( keys )
       RESULT DATA(lt_uploads).
 
-    " -------------------------------------------------------------------
-    " Tabela de configuração para validação genérica de campos obrigatórios
-    " Evita duplicação de N blocos IF idênticos
-    " -------------------------------------------------------------------
-    TYPES: BEGIN OF ty_mandatory_check,
-             fieldname TYPE string,
-             message   TYPE string,
-           END OF ty_mandatory_check.
 
-    DATA(lt_checks) = VALUE STANDARD TABLE OF ty_mandatory_check(
-      ( fieldname = 'COMPANYCODE'    message = 'Empresa é obrigatória' )
-      ( fieldname = 'DOCUMENTDATE'   message = 'Data da fatura é obrigatória' )
-      ( fieldname = 'POSTINGDATE'    message = 'Data de lançamento é obrigatória' )
-      ( fieldname = 'GROSSAMOUNT'    message = 'Montante é obrigatório' )
-      ( fieldname = 'CURRENCY'       message = 'Moeda é obrigatória' )
-      ( fieldname = 'PURCHASEORDER'  message = 'Pedido de compras é obrigatório' )
-      ( fieldname = 'POITEM'         message = 'Item do pedido é obrigatório' )
-      ( fieldname = 'TAXCODE'        message = 'Código de imposto é obrigatório' )
-    ).
 
     LOOP AT lt_uploads INTO DATA(ls_upload).
 
@@ -267,14 +266,14 @@ CLASS lhc_upload IMPLEMENTATION.
 
     LOOP AT lt_uploads INTO DATA(ls_upload).
       " Skip already processed entries
-      IF ls_upload-Status = gc_status-success.
+      IF ls_upload-Status = gc_status_success.
         CONTINUE.
       ENDIF.
 
       CLEAR: lv_status, lv_message, lv_invoice_no, lv_fiscal_year.
 
       " Build payload and execute API call (separated concerns)
-      DATA(lv_payload) = build_invoice_payload( ls_upload ).
+      DATA(lv_payload) = build_invoice_payload( CORRESPONDING ty_invoice_data( ls_upload ) ).
 
       execute_api_call(
         EXPORTING iv_payload     = lv_payload
@@ -290,9 +289,9 @@ CLASS lhc_upload IMPLEMENTATION.
         ELSE lv_message ).
 
       DATA(lv_criticality) = COND int1(
-        WHEN lv_status = gc_status-success THEN gc_criticality-positive
-        WHEN lv_status = gc_status-error   THEN gc_criticality-negative
-        ELSE gc_criticality-neutral ).
+        WHEN lv_status = gc_status_success THEN gc_crit_positive
+        WHEN lv_status = gc_status_error   THEN gc_crit_negative
+        ELSE gc_crit_neutral ).
 
       APPEND VALUE #(
         %tky              = ls_upload-%tky
@@ -331,7 +330,14 @@ CLASS lhc_upload IMPLEMENTATION.
 
   METHOD convert_date_to_odata.
     " Convert ABAP date to OData V2 epoch format: /Date(<epoch_ms>)/
-    DATA(lv_utclong) = CONV utclong( |{ iv_date }T000000| ).
+    IF iv_date IS INITIAL.
+      rv_odata_dt = ''.
+      RETURN.
+    ENDIF.
+
+    " utclong expects ISO 8601: YYYY-MM-DDTHH:MM:SS
+    DATA(lv_iso) = |{ iv_date+0(4) }-{ iv_date+4(2) }-{ iv_date+6(2) }T00:00:00|.
+    DATA(lv_utclong) = CONV utclong( lv_iso ).
     DATA(lv_tstmp)   = cl_abap_tstmp=>utclong2tstmp( utclong = lv_utclong ).
     DATA(lv_epoch_ms) = CONV int8( lv_tstmp ) * 1000.
     rv_odata_dt = |/Date({ lv_epoch_ms })/|.
@@ -406,7 +412,7 @@ CLASS lhc_upload IMPLEMENTATION.
     " Parse API response and extract key fields
     " -------------------------------------------------------------------
     IF iv_http_status >= 200 AND iv_http_status < 300.
-      ev_status = gc_status-success.
+      ev_status = gc_status_success.
 
       " Extract SupplierInvoice from response
       FIND REGEX '"SupplierInvoice"\s*:\s*"([^"]+)"' IN iv_response
@@ -424,7 +430,7 @@ CLASS lhc_upload IMPLEMENTATION.
 
       ev_message = |Fatura { ev_invoice_no }/{ ev_fiscal_year } criada com sucesso|.
     ELSE.
-      ev_status = gc_status-error.
+      ev_status = gc_status_error.
 
       " Try to extract error message from OData error response
       FIND REGEX '"message"\s*:\s*\{[^}]*"value"\s*:\s*"([^"]+)"' IN iv_response
@@ -440,7 +446,7 @@ CLASS lhc_upload IMPLEMENTATION.
 
   METHOD execute_api_call.
     " Default to error
-    ev_status = gc_status-error.
+    ev_status = gc_status_error.
     CLEAR: ev_message, ev_invoice_no, ev_fiscal_year.
 
     TRY.
@@ -454,16 +460,16 @@ CLASS lhc_upload IMPLEMENTATION.
 
         " 2) Configure request
         lo_request->set_uri_path( '/sap/opu/odata/sap/API_SUPPLIERINVOICE_PROCESS_SRV/A_SupplierInvoice' ).
-        lo_request->set_header_value( i_name = 'Content-Type' i_value = 'application/json' ).
-        lo_request->set_header_value( i_name = 'Accept'       i_value = 'application/json' ).
-        lo_request->set_header_value( i_name = 'x-csrf-token' i_value = 'fetch' ).
+        lo_request->set_header_field( i_name = 'Content-Type' i_value = 'application/json' ).
+        lo_request->set_header_field( i_name = 'Accept'       i_value = 'application/json' ).
+        lo_request->set_header_field( i_name = 'x-csrf-token' i_value = 'fetch' ).
 
         " 3) Fetch CSRF token via GET
         DATA(lo_get_response) = lo_http_client->execute( if_web_http_client=>get ).
-        DATA(lv_csrf_token) = lo_get_response->get_header_value( 'x-csrf-token' ).
+        DATA(lv_csrf_token) = lo_get_response->get_header_field( 'x-csrf-token' ).
 
         " 4) Execute POST with payload
-        lo_request->set_header_value( i_name = 'x-csrf-token' i_value = lv_csrf_token ).
+        lo_request->set_header_field( i_name = 'x-csrf-token' i_value = lv_csrf_token ).
         lo_request->set_text( iv_payload ).
 
         DATA(lo_response)      = lo_http_client->execute( if_web_http_client=>post ).
