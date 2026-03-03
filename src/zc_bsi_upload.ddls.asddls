@@ -2,11 +2,12 @@
 @Metadata.allowExtensions: true
 @EndUserText.label: 'BSI Upload - Projection'
 @ObjectModel.semanticKey: ['CompanyCode', 'Reference']
-define root view entity ZC_BSI_Upload
-  provider contract transactional_query
+define view entity ZC_BSI_Upload
   as projection on ZI_BSI_Upload
 {
   key UploadUuid,
+      JobUuid,
+
 
       @Consumption.valueHelpDefinition: [{ entity: { name: 'I_CompanyCode', element: 'CompanyCode' } }]
       @EndUserText.label: 'Empresa'
@@ -60,5 +61,8 @@ define root view entity ZC_BSI_Upload
       CreatedAt,
       LastChangedBy,
       LastChangedAt,
-      LocalLastChangedAt
+      LocalLastChangedAt,
+      
+      /* Associations */
+      _UploadJob : redirected to parent ZC_BSI_UploadJob
 }

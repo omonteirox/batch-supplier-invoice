@@ -1,0 +1,105 @@
+managed implementation in class ZBP_I_BSI_UPLOADJOB unique;
+strict ( 2 );
+with draft;
+
+define behavior for ZI_BSI_UploadJob alias UploadJob
+persistent table zbsi_upld_job
+draft table zbsi_upld_job_d
+etag master LocalLastChangedAt
+lock master total etag LastChangedAt
+authorization master ( global )
+{
+  create;
+  update;
+  delete;
+
+  draft action Edit;
+  draft action Activate optimized;
+  draft action Discard;
+  draft action Resume;
+  draft determine action Prepare;
+
+  field ( readonly, numbering : managed ) JobUuid;
+  
+  field ( readonly ) Status, StatusCriticality, CreatedBy, CreatedAt, LastChangedBy, LastChangedAt, LocalLastChangedAt;
+
+  action ( features : instance ) ProcessFile result [1] $self;
+
+  association _Invoices { create; with draft; }
+
+  mapping for zbsi_upld_job
+  {
+    JobUuid = job_uuid;
+    ContentId = content_id;
+    FileName = file_name;
+    MimeType = mime_type;
+    FileContent = file_content;
+    Status = status;
+    StatusCriticality = status_criticality;
+    CreatedBy = created_by;
+    CreatedAt = created_at;
+    LastChangedBy = last_changed_by;
+    LastChangedAt = last_changed_at;
+    LocalLastChangedAt = local_last_changed_at;
+  }
+}
+
+define behavior for ZI_BSI_Upload alias Upload
+persistent table zbsi_upload
+draft table zbsi_upload_d
+etag master LocalLastChangedAt
+lock dependent by _UploadJob
+authorization dependent by _UploadJob
+{
+  update;
+  delete;
+
+  field ( readonly, numbering : managed ) UploadUuid;
+  field ( readonly ) JobUuid, Status, StatusCriticality, Message, SupplierInvoice, FiscalYear, CreatedBy, CreatedAt, LastChangedBy, LastChangedAt, LocalLastChangedAt;
+
+  field ( mandatory ) CompanyCode, DocumentDate, PostingDate, InvoicingParty, GrossAmount, Currency, PurchaseOrder, PoItem, TaxCode;
+
+  association _UploadJob { with draft; }
+
+  action ( features : instance ) ExecuteBatch result [1] $self;
+
+  determination setDefaults on modify { create; }
+
+  validation validateMandatoryFields on save
+  {
+    field CompanyCode, DocumentDate, PostingDate, InvoicingParty,
+          GrossAmount, Currency, PurchaseOrder, PoItem, TaxCode;
+  }
+
+  validation validateAmounts on save
+  {
+    field GrossAmount;
+  }
+
+  mapping for zbsi_upload corresponding
+  {
+    UploadUuid         = upload_uuid;
+    JobUuid            = job_uuid;
+    CompanyCode        = company_code;
+    DocumentDate       = document_date;
+    PostingDate        = posting_date;
+    Reference          = reference;
+    InvoicingParty     = invoicing_party;
+    GrossAmount        = gross_amount;
+    Currency           = currency;
+    PurchaseOrder      = purchase_order;
+    PoItem             = po_item;
+    TaxCode            = tax_code;
+    NfCategory         = nf_category;
+    Status             = status;
+    StatusCriticality   = status_criticality;
+    Message            = message;
+    SupplierInvoice    = supplier_invoice;
+    FiscalYear         = fiscal_year;
+    CreatedBy          = created_by;
+    CreatedAt          = created_at;
+    LastChangedBy      = last_changed_by;
+    LastChangedAt      = last_changed_at;
+    LocalLastChangedAt = local_last_changed_at;
+  }
+}

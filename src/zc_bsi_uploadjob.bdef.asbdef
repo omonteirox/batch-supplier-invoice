@@ -1,0 +1,30 @@
+projection;
+strict ( 2 );
+use draft;
+
+define behavior for ZC_BSI_UploadJob alias UploadJob
+{
+  use create;
+  use update;
+  use delete;
+
+  use action Edit;
+  use action Activate;
+  use action Discard;
+  use action Resume;
+  use action Prepare;
+
+  use action ProcessFile;
+
+  use association _Invoices { create; with draft; }
+}
+
+define behavior for ZC_BSI_Upload alias Upload
+{
+  use update;
+  use delete;
+
+  use action ExecuteBatch;
+
+  use association _UploadJob { with draft; }
+}

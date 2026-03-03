@@ -1,0 +1,48 @@
+@EndUserText.label: 'Batch Supplier Invoice Job - Metadata Extension'
+@Metadata.layer: #CUSTOMER
+@UI.headerInfo: {
+  typeName: 'Job de Upload',
+  typeNamePlural: 'Jobs de Upload',
+  title: { type: #STANDARD, value: 'FileName' },
+  description: { type: #STANDARD, value: 'Status' }
+}
+annotate entity ZC_BSI_UploadJob with
+{
+  @UI.facet: [
+    { id: 'GeneralInfo',
+      label: 'Informações do Arquivo',
+      type: #IDENTIFICATION_REFERENCE,
+      position: 10 },
+    { id: 'Invoices',
+      label: 'Faturas Carregadas',
+      type: #LINEITEM_REFERENCE,
+      targetElement: '_Invoices',
+      position: 20 }
+  ]
+
+  @UI.hidden: true
+  JobUuid;
+  
+  @UI.hidden: true
+  ContentId;
+
+  @UI: { lineItem:       [{ position: 10 }],
+         identification: [{ position: 10 }],
+         selectionField: [{ position: 10 }] }
+  FileName;
+  
+  @UI.hidden: true
+  MimeType;
+
+  @UI: { identification: [{ position: 20 }] }
+  FileContent;
+
+  @UI: { lineItem:       [{ position: 30, criticality: 'StatusCriticality' },
+                          { type: #FOR_ACTION, dataAction: 'ProcessFile', label: 'Processar Arquivo' } ],
+         identification: [{ position: 30, criticality: 'StatusCriticality' },
+                          { type: #FOR_ACTION, dataAction: 'ProcessFile', label: 'Processar Arquivo' } ] }
+  Status;
+
+  @UI.hidden: true
+  StatusCriticality;
+}

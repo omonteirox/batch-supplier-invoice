@@ -1,0 +1,5 @@
+CLASS zbp_i_bsi_uploadjob DEFINITION PUBLIC ABSTRACT FINAL FOR BEHAVIOR OF zi_bsi_uploadjob.
+ENDCLASS.
+
+CLASS zbp_i_bsi_uploadjob IMPLEMENTATION.
+ENDCLASS.

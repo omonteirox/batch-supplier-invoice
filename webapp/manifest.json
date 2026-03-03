@@ -99,44 +99,51 @@
       "routes": [
         {
           "pattern": ":?query:",
-          "name": "ZC_BSI_UploadList",
-          "target": "ZC_BSI_UploadList"
+          "name": "ZC_BSI_UploadJobList",
+          "target": "ZC_BSI_UploadJobList"
         },
         {
-          "pattern": "ZC_BSI_Upload({key}):?query:",
+          "pattern": "ZC_BSI_UploadJob({key}):?query:",
+          "name": "ZC_BSI_UploadJobObjectPage",
+          "target": "ZC_BSI_UploadJobObjectPage"
+        },
+        {
+          "pattern": "ZC_BSI_UploadJob({key})/_Invoices({key2}):?query:",
           "name": "ZC_BSI_UploadObjectPage",
           "target": "ZC_BSI_UploadObjectPage"
         }
       ],
       "targets": {
-        "ZC_BSI_UploadList": {
+        "ZC_BSI_UploadJobList": {
           "type": "Component",
-          "id": "ZC_BSI_UploadList",
+          "id": "ZC_BSI_UploadJobList",
           "name": "sap.fe.templates.ListReport",
           "options": {
             "settings": {
-              "contextPath": "/ZC_BSI_Upload",
+              "contextPath": "/ZC_BSI_UploadJob",
               "variantManagement": "Page",
               "navigation": {
-                "ZC_BSI_Upload": {
+                "ZC_BSI_UploadJob": {
                   "detail": {
-                    "route": "ZC_BSI_UploadObjectPage"
+                    "route": "ZC_BSI_UploadJobObjectPage"
                   }
                 }
-              },
-              "controlConfiguration": {
-                "@com.sap.vocabularies.UI.v1.LineItem": {
-                  "actions": {
-                    "UploadExcel": {
-                      "id": "UploadExcelButton",
-                      "text": "Importar Planilha",
-                      "press": "zbsi.batchsupplierinvoice.ext.controller.UploadExcel.openUploadDialog",
-                      "requiresSelection": false,
-                      "position": {
-                        "placement": "Before",
-                        "anchor": "DataFieldForAction::ExecuteBatch"
-                      }
-                    }
+              }
+            }
+          }
+        },
+        "ZC_BSI_UploadJobObjectPage": {
+          "type": "Component",
+          "id": "ZC_BSI_UploadJobObjectPage",
+          "name": "sap.fe.templates.ObjectPage",
+          "options": {
+            "settings": {
+              "editableHeaderContent": false,
+              "contextPath": "/ZC_BSI_UploadJob",
+              "navigation": {
+                "_Invoices": {
+                  "detail": {
+                    "route": "ZC_BSI_UploadObjectPage"
                   }
                 }
               }
@@ -150,7 +157,7 @@
           "options": {
             "settings": {
               "editableHeaderContent": false,
-              "contextPath": "/ZC_BSI_Upload"
+              "contextPath": "/ZC_BSI_UploadJob/_Invoices"
             }
           }
         }

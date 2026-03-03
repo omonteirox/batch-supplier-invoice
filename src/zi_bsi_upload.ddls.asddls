@@ -6,10 +6,12 @@
   sizeCategory: #L,
   dataClass: #TRANSACTIONAL
 }
-define root view entity ZI_BSI_Upload
+define view entity ZI_BSI_Upload
   as select from zbsi_upload
+  association to parent ZI_BSI_UploadJob as _UploadJob on $projection.JobUuid = _UploadJob.JobUuid
 {
   key upload_uuid          as UploadUuid,
+      job_uuid             as JobUuid,
       company_code         as CompanyCode,
       document_date        as DocumentDate,
       posting_date         as PostingDate,
@@ -40,5 +42,7 @@ define root view entity ZI_BSI_Upload
       @Semantics.systemDateTime.lastChangedAt: true
       last_changed_at      as LastChangedAt,
       @Semantics.systemDateTime.localInstanceLastChangedAt: true
-      local_last_changed_at as LocalLastChangedAt
+      local_last_changed_at as LocalLastChangedAt,
+      
+      _UploadJob
 }

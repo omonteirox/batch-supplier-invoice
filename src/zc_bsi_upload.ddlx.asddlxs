@@ -22,10 +22,12 @@ annotate entity ZC_BSI_Upload with
 
   @UI.hidden: true
   @UI.lineItem: [
-    { type: #FOR_ACTION, dataAction: 'ExecuteBatch', label: 'Executar Lançamento', position: 10 },
-    { type: #FOR_ACTION, dataAction: 'ImportFromFile', label: 'Importar CSV via Texto', position: 5 }
+    { type: #FOR_ACTION, dataAction: 'ExecuteBatch', label: 'Executar Lançamento', position: 10 }
   ]
   UploadUuid;
+  
+  @UI.hidden: true
+  JobUuid;
 
   @UI: { lineItem:       [{ position: 10 }],
          identification: [{ position: 10 }],
