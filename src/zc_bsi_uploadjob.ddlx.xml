@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_DDLX" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <DDLX>
+    <METADATA_EXTENSIONNAME>ZC_BSI_UPLOADJOB</METADATA_EXTENSIONNAME>
+    <DDLANGUAGE>E</DDLANGUAGE>
+    <DDTEXT>Metadata Extension for ZC_BSI_UPLOADJOB</DDTEXT>
+   </DDLX>
+  </asx:values>
+ </asx:abap>
+</abapGit>
