@@ -21,18 +21,15 @@ define root view entity ZC_BSI_Upload
       @EndUserText.label: 'Referência'
       Reference,
 
-      @Consumption.valueHelpDefinition: [{ entity: { name: 'I_Supplier_VH', element: 'Supplier' } }]
       @EndUserText.label: 'Fornecedor'
       InvoicingParty,
 
       @EndUserText.label: 'Montante Bruto'
       GrossAmount,
 
-      @Consumption.valueHelpDefinition: [{ entity: { name: 'I_CurrencyStdVH', element: 'Currency' } }]
       @EndUserText.label: 'Moeda'
       Currency,
 
-      @Consumption.valueHelpDefinition: [{ entity: { name: 'I_PurchaseOrderStdVH', element: 'PurchaseOrder' } }]
       @EndUserText.label: 'Pedido de Compras'
       PurchaseOrder,
 

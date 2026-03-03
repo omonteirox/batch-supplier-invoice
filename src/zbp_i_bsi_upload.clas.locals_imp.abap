@@ -1,7 +1,6 @@
 CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
 
   PRIVATE SECTION.
-
     TYPES: BEGIN OF ty_invoice_data,
              CompanyCode    TYPE c LENGTH 4,
              DocumentDate   TYPE d,
@@ -16,19 +15,16 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
              NfCategory     TYPE c LENGTH 2,
            END OF ty_invoice_data.
 
-    CONSTANTS:
-      gc_status_pending TYPE c LENGTH 1 VALUE 'P',
-      gc_status_success TYPE c LENGTH 1 VALUE 'S',
-      gc_status_error   TYPE c LENGTH 1 VALUE 'E'.
+    CONSTANTS gc_status_pending TYPE c LENGTH 1                             VALUE 'P'.
+    CONSTANTS gc_status_success TYPE c LENGTH 1                             VALUE 'S'.
+    CONSTANTS gc_status_error   TYPE c LENGTH 1                             VALUE 'E'.
 
-    CONSTANTS:
-      gc_crit_neutral  TYPE int1 VALUE 0,
-      gc_crit_negative TYPE int1 VALUE 1,
-      gc_crit_positive TYPE int1 VALUE 3.
+    CONSTANTS gc_crit_neutral   TYPE int1                                   VALUE 0.
+    CONSTANTS gc_crit_negative  TYPE int1                                   VALUE 1.
+    CONSTANTS gc_crit_positive  TYPE int1                                   VALUE 3.
 
-    CONSTANTS:
-      gc_comm_scenario TYPE if_com_management=>ty_cscn_id VALUE 'Z_BSI_SUPLRINVC',
-      gc_outbound_svc  TYPE if_com_management=>ty_cscn_outb_srv_id VALUE 'Z_BSI_SUPLRINVC_REST'.
+    CONSTANTS gc_comm_scenario  TYPE if_com_management=>ty_cscn_id          VALUE 'Z_BSI_SUPLRINVC'.
+    CONSTANTS gc_outbound_svc   TYPE if_com_management=>ty_cscn_outb_srv_id VALUE 'Z_BSI_SUPLRINVC_REST'.
 
     METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
       IMPORTING REQUEST requested_authorizations FOR Upload RESULT result.
@@ -49,39 +45,50 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
       IMPORTING keys FOR ACTION Upload~ExecuteBatch RESULT result.
 
     "! Build the JSON payload for the Supplier Invoice API
+    "!
+    "! @parameter is_upload |
+    "! @parameter rv_json |
     METHODS build_invoice_payload
-      IMPORTING
-        is_upload       TYPE ty_invoice_data
-      RETURNING
-        VALUE(rv_json)  TYPE string.
+      IMPORTING is_upload      TYPE ty_invoice_data
+      RETURNING VALUE(rv_json) TYPE string.
 
     "! Parse the API response JSON and extract invoice data
+    "!
+    "! @parameter iv_response |
+    "! @parameter iv_http_status |
+    "! @parameter ev_status |
+    "! @parameter ev_message |
+    "! @parameter ev_invoice_no |
+    "! @parameter ev_fiscal_year |
     METHODS parse_api_response
-      IMPORTING
-        iv_response     TYPE string
-        iv_http_status  TYPE i
-      EXPORTING
-        ev_status       TYPE c
-        ev_message      TYPE string
-        ev_invoice_no   TYPE c
-        ev_fiscal_year  TYPE c.
+      IMPORTING iv_response    TYPE string
+                iv_http_status TYPE i
+      EXPORTING ev_status      TYPE c
+                ev_message     TYPE string
+                ev_invoice_no  TYPE c
+                ev_fiscal_year TYPE c.
 
     "! Convert ABAP date to OData V2 epoch format: /Date(<epoch_ms>)/
+    "!
+    "! @parameter iv_date |
+    "! @parameter rv_odata_dt |
     METHODS convert_date_to_odata
-      IMPORTING
-        iv_date            TYPE d
-      RETURNING
-        VALUE(rv_odata_dt) TYPE string.
+      IMPORTING iv_date            TYPE d
+      RETURNING VALUE(rv_odata_dt) TYPE string.
 
     "! Execute the HTTP call to the Supplier Invoice API
+    "!
+    "! @parameter iv_payload |
+    "! @parameter ev_status |
+    "! @parameter ev_message |
+    "! @parameter ev_invoice_no |
+    "! @parameter ev_fiscal_year |
     METHODS execute_api_call
-      IMPORTING
-        iv_payload      TYPE string
-      EXPORTING
-        ev_status       TYPE c
-        ev_message      TYPE string
-        ev_invoice_no   TYPE c
-        ev_fiscal_year  TYPE c.
+      IMPORTING iv_payload     TYPE string
+      EXPORTING ev_status      TYPE c
+                ev_message     TYPE string
+                ev_invoice_no  TYPE c
+                ev_fiscal_year TYPE c.
 
 ENDCLASS.
 

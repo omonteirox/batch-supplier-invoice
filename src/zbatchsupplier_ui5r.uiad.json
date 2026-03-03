@@ -1,0 +1,35 @@
+{
+  "formatVersion": "2",
+  "header": {
+    "description": "Importar faturas de fornecedor via arquivo XLSX/CSV",
+    "originalLanguage": "en",
+    "abapLanguageVersion": "cloudDevelopment"
+  },
+  "generalInformation": {
+    "appType": "ui5",
+    "catalogId": "SAP_TC_UI5_REPO_UIAD",
+    "targetMappingTitle": "Inserção em massa de faturas - NF"
+  },
+  "ui5AppDetails": {
+    "appId": "assy.gm.batchsupplierinvoice"
+  },
+  "navigation": {
+    "targetMappingId": "UI5R_EE57CA733676A5EFE9201CDE2EE14B5FFB6EA49A_TM",
+    "semanticObject": "batchinsert",
+    "action": "manage",
+    "desktop": true,
+    "tablet": true,
+    "phone": true
+  },
+  "tiles": [
+    {
+      "id": "UI5R_EE57CA733676A5EFE9201CDE2EE14B5FFB6EA49A_AL",
+      "tileType": "static",
+      "isDefault": true,
+      "standard": {
+        "title": "Inserção em massa de faturas - NF",
+        "subtitle": "Inserir fatuas em massa - NF"
+      }
+    }
+  ]
+}
