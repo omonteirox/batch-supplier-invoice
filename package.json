@@ -1,0 +1,16 @@
+{
+    "name": "zbsi.batchsupplierinvoice",
+    "version": "1.0.0",
+    "description": "Carga em Massa - Fatura de Fornecedor",
+    "private": true,
+    "scripts": {
+        "start": "fiori run --open 'index.html?sap-ui-xx-viewCache=false'",
+        "start-mock": "fiori run --config ./ui5-mock.yaml --open 'index.html?sap-ui-xx-viewCache=false'",
+        "build": "ui5 build --config=ui5.yaml --clean-dest --dest dist"
+    },
+    "devDependencies": {
+        "@sap/ux-ui5-tooling": "1",
+        "@ui5/cli": "^3.0.0",
+        "rimraf": "^3.0.2"
+    }
+}

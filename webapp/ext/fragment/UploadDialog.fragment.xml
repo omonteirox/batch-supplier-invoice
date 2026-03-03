@@ -1,0 +1,45 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:u="sap.ui.unified"
+    xmlns:l="sap.ui.layout">
+    <Dialog
+        id="uploadDialog"
+        title="Importar Faturas (Excel/CSV)"
+        contentWidth="25rem">
+        <content>
+            <VBox class="sapUiMediumMargin">
+                <Label text="Empresa (Company Code)" required="true"/>
+                <Input
+                    id="inputCompany"
+                    value="{dialog>/companyCode}"
+                    maxLength="4"
+                    placeholder="Ex: 1000"
+                    change=".onCompanyCodeChange"
+                    class="sapUiSmallMarginBottom"/>
+
+                <Label text="Selecione o Arquivo" required="true"/>
+                <u:FileUploader
+                    id="fileUploader"
+                    name="fileUploader"
+                    fileType="xlsx,csv"
+                    typeMissmatch=".onTypeMismatch"
+                    buttonText="Selecionar"
+                    placeholder="Escolha um arquivo .xlsx ou .csv"
+                    style="Emphasized"
+                    width="100%"/>
+            </VBox>
+        </content>
+        <beginButton>
+            <Button
+                text="Processar"
+                type="Emphasized"
+                press=".onUploadPress"/>
+        </beginButton>
+        <endButton>
+            <Button
+                text="Cancelar"
+                press=".onCloseDialog"/>
+        </endButton>
+    </Dialog>
+</core:FragmentDefinition>

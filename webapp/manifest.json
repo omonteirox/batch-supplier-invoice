@@ -1,5 +1,5 @@
 {
-  "_version": "1.65.0",
+  "_version": "1.49.0",
   "sap.app": {
     "id": "zbsi.batchsupplierinvoice",
     "type": "application",
@@ -9,25 +9,27 @@
     },
     "title": "{{appTitle}}",
     "description": "{{appDescription}}",
+    "resources": "resources.json",
     "sourceTemplate": {
-      "id": "@sap/generator-fiori:basic",
-      "version": "1.0.0",
-      "toolsId": "custom"
+      "id": "@sap/generator-fiori:lrop",
+      "version": "1.14.7",
+      "toolsId": "349d97a6-2581-42cb-b1ec-963e6f9cd1de"
     },
     "dataSources": {
       "mainService": {
         "uri": "/sap/opu/odata4/sap/zsb_bsi_upload/srvd_a2x/sap/zsd_bsi_upload/0001/",
         "type": "OData",
         "settings": {
+          "annotations": [],
           "odataVersion": "4.0"
         }
       }
     },
     "crossNavigation": {
       "inbounds": {
-        "BatchSupplierInvoice-upload": {
-          "semanticObject": "BatchSupplierInvoice",
-          "action": "upload",
+        "batchsupplierinvoice-display": {
+          "semanticObject": "batchsupplierinvoice",
+          "action": "display",
           "title": "{{appTitle}}",
           "signature": {
             "parameters": {},
@@ -40,24 +42,27 @@
   "sap.ui": {
     "technology": "UI5",
     "icons": {
-      "icon": "sap-icon://upload-to-cloud"
+      "icon": "",
+      "favIcon": "",
+      "phone": "",
+      "phone@2": "",
+      "tablet": "",
+      "tablet@2": ""
     },
     "deviceTypes": {
       "desktop": true,
       "tablet": true,
-      "phone": false
+      "phone": true
     }
   },
   "sap.ui5": {
-    "flexEnabled": false,
+    "flexEnabled": true,
     "dependencies": {
       "minUI5Version": "1.120.0",
       "libs": {
         "sap.m": {},
         "sap.ui.core": {},
-        "sap.ui.layout": {},
-        "sap.ui.table": {},
-        "sap.ui.unified": {}
+        "sap.fe.templates": {}
       }
     },
     "contentDensities": {
@@ -75,20 +80,16 @@
         "dataSource": "mainService",
         "preload": true,
         "settings": {
+          "synchronizationMode": "None",
           "operationMode": "Server",
           "autoExpandSelect": true,
           "earlyRequests": true
         }
       },
-      "upload": {
-        "type": "sap.ui.model.json.JSONModel"
+      "@i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "uri": "i18n/i18n.properties"
       }
-    },
-    "rootView": {
-      "viewName": "zbsi.batchsupplierinvoice.view.Upload",
-      "type": "XML",
-      "async": true,
-      "id": "uploadView"
     },
     "resources": {
       "js": [
@@ -98,28 +99,70 @@
       ]
     },
     "routing": {
-      "config": {
-        "routerClass": "sap.m.routing.Router",
-        "viewType": "XML",
-        "async": true,
-        "viewPath": "zbsi.batchsupplierinvoice.view",
-        "controlAggregation": "pages",
-        "controlId": "app"
-      },
+      "config": {},
       "routes": [
         {
-          "name": "upload",
-          "pattern": "",
-          "target": ["upload"]
+          "pattern": ":?query:",
+          "name": "ZC_BSI_UploadList",
+          "target": "ZC_BSI_UploadList"
+        },
+        {
+          "pattern": "ZC_BSI_Upload({key}):?query:",
+          "name": "ZC_BSI_UploadObjectPage",
+          "target": "ZC_BSI_UploadObjectPage"
         }
       ],
       "targets": {
-        "upload": {
-          "viewType": "XML",
-          "viewName": "Upload",
-          "viewId": "uploadView"
+        "ZC_BSI_UploadList": {
+          "type": "Component",
+          "id": "ZC_BSI_UploadList",
+          "name": "sap.fe.templates.ListReport",
+          "options": {
+            "settings": {
+              "contextPath": "/ZC_BSI_Upload",
+              "variantManagement": "Page",
+              "navigation": {
+                "ZC_BSI_Upload": {
+                  "detail": {
+                    "route": "ZC_BSI_UploadObjectPage"
+                  }
+                }
+              },
+              "controlConfiguration": {
+                "@com.sap.vocabularies.UI.v1.LineItem": {
+                  "actions": {
+                    "UploadExcel": {
+                      "id": "UploadExcelButton",
+                      "text": "Importar Planilha",
+                      "press": "zbsi.batchsupplierinvoice.ext.controller.UploadExcel.openUploadDialog",
+                      "requiresSelection": false,
+                      "position": {
+                        "placement": "Before",
+                         "anchor": "DataFieldForAction::ExecuteBatch"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ZC_BSI_UploadObjectPage": {
+          "type": "Component",
+          "id": "ZC_BSI_UploadObjectPage",
+          "name": "sap.fe.templates.ObjectPage",
+          "options": {
+            "settings": {
+              "editableHeaderContent": false,
+              "contextPath": "/ZC_BSI_Upload"
+            }
+          }
         }
       }
     }
+  },
+  "sap.fiori": {
+    "registrationIds": [],
+    "archeType": "transactional"
   }
 }
