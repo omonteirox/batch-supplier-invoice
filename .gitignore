@@ -4,3 +4,6 @@ node_modules/
 cds-help/
 .agents/
 help-abap/
+.claude/
+CLAUDE.md
+copilot-instructions.md

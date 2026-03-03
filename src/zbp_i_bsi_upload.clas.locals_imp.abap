@@ -1,20 +1,6 @@
 CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
 
   PRIVATE SECTION.
-    TYPES: BEGIN OF ty_invoice_data,
-             CompanyCode    TYPE c LENGTH 4,
-             DocumentDate   TYPE d,
-             PostingDate    TYPE d,
-             Reference      TYPE c LENGTH 16,
-             InvoicingParty TYPE c LENGTH 10,
-             GrossAmount    TYPE p LENGTH 9 DECIMALS 3,
-             Currency       TYPE c LENGTH 5,
-             PurchaseOrder  TYPE c LENGTH 10,
-             PoItem         TYPE c LENGTH 5,
-             TaxCode        TYPE c LENGTH 2,
-             NfCategory     TYPE c LENGTH 2,
-           END OF ty_invoice_data.
-
     CONSTANTS gc_status_pending TYPE c LENGTH 1                             VALUE 'P'.
     CONSTANTS gc_status_success TYPE c LENGTH 1                             VALUE 'S'.
     CONSTANTS gc_status_error   TYPE c LENGTH 1                             VALUE 'E'.
@@ -44,51 +30,21 @@ CLASS lhc_upload DEFINITION INHERITING FROM cl_abap_behavior_handler.
     METHODS ExecuteBatch FOR MODIFY
       IMPORTING keys FOR ACTION Upload~ExecuteBatch RESULT result.
 
-    "! Build the JSON payload for the Supplier Invoice API
+    "! Execute a single invoice creation via OData V4 Client Proxy
     "!
-    "! @parameter is_upload |
-    "! @parameter rv_json |
-    METHODS build_invoice_payload
-      IMPORTING is_upload      TYPE ty_invoice_data
-      RETURNING VALUE(rv_json) TYPE string.
-
-    "! Parse the API response JSON and extract invoice data
-    "!
-    "! @parameter iv_response |
-    "! @parameter iv_http_status |
-    "! @parameter ev_status |
-    "! @parameter ev_message |
-    "! @parameter ev_invoice_no |
-    "! @parameter ev_fiscal_year |
-    METHODS parse_api_response
-      IMPORTING iv_response    TYPE string
-                iv_http_status TYPE i
-      EXPORTING ev_status      TYPE c
-                ev_message     TYPE string
-                ev_invoice_no  TYPE c
-                ev_fiscal_year TYPE c.
-
-    "! Convert ABAP date to OData V2 epoch format: /Date(<epoch_ms>)/
-    "!
-    "! @parameter iv_date |
-    "! @parameter rv_odata_dt |
-    METHODS convert_date_to_odata
-      IMPORTING iv_date            TYPE d
-      RETURNING VALUE(rv_odata_dt) TYPE string.
-
-    "! Execute the HTTP call to the Supplier Invoice API
-    "!
-    "! @parameter iv_payload |
-    "! @parameter ev_status |
-    "! @parameter ev_message |
-    "! @parameter ev_invoice_no |
-    "! @parameter ev_fiscal_year |
+    "! @parameter io_client_proxy | Proxy instance (reused across loop iterations)
+    "! @parameter is_upload       | Upload entity data read from RAP
+    "! @parameter ev_status       | S=Success, E=Error
+    "! @parameter ev_message      | Human-readable result message
+    "! @parameter ev_invoice_no   | Created Supplier Invoice number
+    "! @parameter ev_fiscal_year  | Fiscal Year of created document
     METHODS execute_api_call
-      IMPORTING iv_payload     TYPE string
-      EXPORTING ev_status      TYPE c
-                ev_message     TYPE string
-                ev_invoice_no  TYPE c
-                ev_fiscal_year TYPE c.
+      IMPORTING io_client_proxy TYPE REF TO /iwbep/if_cp_client_proxy
+                is_upload       TYPE zi_bsi_upload
+      EXPORTING ev_status       TYPE c
+                ev_message      TYPE string
+                ev_invoice_no   TYPE c
+                ev_fiscal_year  TYPE c.
 
 ENDCLASS.
 
@@ -264,6 +220,102 @@ CLASS lhc_upload IMPLEMENTATION.
     DATA lv_invoice_no  TYPE c LENGTH 10.
     DATA lv_fiscal_year TYPE c LENGTH 4.
 
+    " ---------------------------------------------------------------
+    " Instantiate Client Proxy ONCE outside the LOOP (avoids N+1 HTTP)
+    " The proxy manages connection reuse and CSRF tokens internally
+    " ---------------------------------------------------------------
+    DATA lo_client_proxy TYPE REF TO /iwbep/if_cp_client_proxy.
+
+    TRY.
+        DATA(lo_destination) = cl_http_destination_provider=>create_by_comm_arrangement(
+          comm_scenario  = gc_comm_scenario
+          service_id     = gc_outbound_svc ).
+
+        DATA(lo_http_client) = cl_web_http_client_manager=>create_by_http_destination(
+          lo_destination ).
+
+        lo_client_proxy = /iwbep/cl_cp_factory_remote=>create_v4_remote_proxy(
+          EXPORTING
+            is_proxy_model_key = VALUE #(
+              repository_id       = 'DEFAULT'
+              proxy_model_id      = 'ZCM_SUPPLIERINVOICE'
+              proxy_model_version = '0001' )
+            io_http_client             = lo_http_client
+            iv_relative_service_root   = '/sap/opu/odata/sap/API_SUPPLIERINVOICE_PROCESS_SRV' ).
+
+      CATCH cx_http_dest_provider_error INTO DATA(lx_dest_init).
+        " If proxy instantiation fails, mark ALL records as error and return
+        LOOP AT lt_uploads INTO DATA(ls_err).
+          IF ls_err-Status = gc_status_success.
+            CONTINUE.
+          ENDIF.
+          APPEND VALUE #(
+            %tky              = ls_err-%tky
+            Status            = gc_status_error
+            StatusCriticality = gc_crit_negative
+            Message           = |Erro destino: { lx_dest_init->get_text( ) }|
+            %control = VALUE #(
+              Status            = if_abap_behv=>mk-on
+              StatusCriticality = if_abap_behv=>mk-on
+              Message           = if_abap_behv=>mk-on )
+          ) TO lt_update.
+        ENDLOOP.
+
+        " Persist error results and return early
+        MODIFY ENTITIES OF zi_bsi_upload IN LOCAL MODE
+          ENTITY Upload
+            UPDATE FROM lt_update
+          REPORTED DATA(lt_err_reported).
+
+        READ ENTITIES OF zi_bsi_upload IN LOCAL MODE
+          ENTITY Upload
+            FIELDS ( Status StatusCriticality Message SupplierInvoice FiscalYear )
+            WITH CORRESPONDING #( keys )
+          RESULT DATA(lt_err_result).
+
+        result = VALUE #( FOR ls_r IN lt_err_result
+          ( %tky   = ls_r-%tky
+            %param = ls_r ) ).
+        RETURN.
+
+      CATCH cx_web_http_client_error INTO DATA(lx_http_init).
+        " Same early-return pattern for HTTP client errors
+        LOOP AT lt_uploads INTO DATA(ls_err2).
+          IF ls_err2-Status = gc_status_success.
+            CONTINUE.
+          ENDIF.
+          APPEND VALUE #(
+            %tky              = ls_err2-%tky
+            Status            = gc_status_error
+            StatusCriticality = gc_crit_negative
+            Message           = |Erro HTTP: { lx_http_init->get_text( ) }|
+            %control = VALUE #(
+              Status            = if_abap_behv=>mk-on
+              StatusCriticality = if_abap_behv=>mk-on
+              Message           = if_abap_behv=>mk-on )
+          ) TO lt_update.
+        ENDLOOP.
+
+        MODIFY ENTITIES OF zi_bsi_upload IN LOCAL MODE
+          ENTITY Upload
+            UPDATE FROM lt_update
+          REPORTED DATA(lt_err_reported2).
+
+        READ ENTITIES OF zi_bsi_upload IN LOCAL MODE
+          ENTITY Upload
+            FIELDS ( Status StatusCriticality Message SupplierInvoice FiscalYear )
+            WITH CORRESPONDING #( keys )
+          RESULT DATA(lt_err_result2).
+
+        result = VALUE #( FOR ls_r2 IN lt_err_result2
+          ( %tky   = ls_r2-%tky
+            %param = ls_r2 ) ).
+        RETURN.
+    ENDTRY.
+
+    " ---------------------------------------------------------------
+    " Process each upload record using the SHARED proxy instance
+    " ---------------------------------------------------------------
     LOOP AT lt_uploads INTO DATA(ls_upload).
       " Skip already processed entries
       IF ls_upload-Status = gc_status_success.
@@ -272,15 +324,14 @@ CLASS lhc_upload IMPLEMENTATION.
 
       CLEAR: lv_status, lv_message, lv_invoice_no, lv_fiscal_year.
 
-      " Build payload and execute API call (separated concerns)
-      DATA(lv_payload) = build_invoice_payload( CORRESPONDING ty_invoice_data( ls_upload ) ).
-
+      " Execute API call using the typed proxy (reuses connection)
       execute_api_call(
-        EXPORTING iv_payload     = lv_payload
-        IMPORTING ev_status      = lv_status
-                  ev_message     = lv_message
-                  ev_invoice_no  = lv_invoice_no
-                  ev_fiscal_year = lv_fiscal_year ).
+        EXPORTING io_client_proxy = lo_client_proxy
+                  is_upload       = CORRESPONDING zi_bsi_upload( ls_upload )
+        IMPORTING ev_status       = lv_status
+                  ev_message      = lv_message
+                  ev_invoice_no   = lv_invoice_no
+                  ev_fiscal_year  = lv_fiscal_year ).
 
       " Truncate message to table field length
       DATA(lv_msg_text) = COND string(
@@ -315,10 +366,13 @@ CLASS lhc_upload IMPLEMENTATION.
         UPDATE FROM lt_update
       REPORTED DATA(lt_reported).
 
-    " Return updated entities
+    " Return updated entities — explicit field list instead of ALL FIELDS
     READ ENTITIES OF zi_bsi_upload IN LOCAL MODE
       ENTITY Upload
-        ALL FIELDS
+        FIELDS ( CompanyCode DocumentDate PostingDate Reference
+                 InvoicingParty GrossAmount Currency PurchaseOrder
+                 PoItem TaxCode NfCategory Status StatusCriticality
+                 Message SupplierInvoice FiscalYear )
         WITH CORRESPONDING #( keys )
       RESULT DATA(lt_result).
 
@@ -328,171 +382,99 @@ CLASS lhc_upload IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD convert_date_to_odata.
-    " Convert ABAP date to OData V2 epoch format: /Date(<epoch_ms>)/
-    IF iv_date IS INITIAL.
-      rv_odata_dt = ''.
-      RETURN.
-    ENDIF.
-
-    " utclong expects ISO 8601: YYYY-MM-DDTHH:MM:SS
-    DATA(lv_iso) = |{ iv_date+0(4) }-{ iv_date+4(2) }-{ iv_date+6(2) }T00:00:00|.
-    DATA(lv_utclong) = CONV utclong( lv_iso ).
-    DATA(lv_tstmp)   = cl_abap_tstmp=>utclong2tstmp( utclong = lv_utclong ).
-    DATA(lv_epoch_ms) = CONV int8( lv_tstmp ) * 1000.
-    rv_odata_dt = |/Date({ lv_epoch_ms })/|.
-  ENDMETHOD.
-
-
-  METHOD build_invoice_payload.
-    " -------------------------------------------------------------------
-    " Build structured JSON payload for Supplier Invoice API
-    " Each section is constructed separately for clarity and maintainability
-    " -------------------------------------------------------------------
-    DATA(lv_doc_date)  = convert_date_to_odata( CONV d( is_upload-DocumentDate ) ).
-    DATA(lv_post_date) = convert_date_to_odata( CONV d( is_upload-PostingDate ) ).
-
-    " Item PO reference
-    DATA(lv_item_json) = |\{|
-      && |"SupplierInvoiceItem":"0001",|
-      && |"PurchaseOrder":"{ is_upload-PurchaseOrder }",|
-      && |"PurchaseOrderItem":"{ is_upload-PoItem }",|
-      && |"TaxCode":"{ is_upload-TaxCode }",|
-      && |"SupplierInvoiceItemAmount":"{ is_upload-GrossAmount }"|
-      && |\}|.
-
-    " NF Document (Brazil-specific, optional)
-    DATA(lv_nf_json) = ||.
-    IF is_upload-NfCategory IS NOT INITIAL.
-      lv_nf_json = |,"to_BR_SupplierInvoiceNFDocument":\{|
-        && |"BR_NFType":"{ is_upload-NfCategory }"|
-        && |\}|.
-    ENDIF.
-
-    " Selected Purchase Orders
-    DATA(lv_sel_po_json) = |,"to_SelectedPurchaseOrders":\{|
-      && |"results":[\{|
-      && |"PurchaseOrder":"{ is_upload-PurchaseOrder }",|
-      && |"PurchaseOrderItem":"{ is_upload-PoItem }"|
-      && |\}]|
-      && |\}|.
-
-    " Optional: Invoicing Party
-    DATA(lv_invoicing_party) = ||.
-    IF is_upload-InvoicingParty IS NOT INITIAL.
-      lv_invoicing_party = |,"InvoicingParty":"{ is_upload-InvoicingParty }"|.
-    ENDIF.
-
-    " Optional: Reference
-    DATA(lv_reference) = ||.
-    IF is_upload-Reference IS NOT INITIAL.
-      lv_reference = |,"SupplierInvoiceIDByInvcgParty":"{ is_upload-Reference }"|.
-    ENDIF.
-
-    " Assemble final payload
-    rv_json = |\{|
-      && |"CompanyCode":"{ is_upload-CompanyCode }",|
-      && |"DocumentDate":"{ lv_doc_date }",|
-      && |"PostingDate":"{ lv_post_date }",|
-      && |"DocumentCurrency":"{ is_upload-Currency }",|
-      && |"InvoiceGrossAmount":"{ is_upload-GrossAmount }"|
-      && lv_invoicing_party
-      && lv_reference
-      && |,"to_SuplrInvcItemPurOrdRef":\{|
-      && |"results":[{ lv_item_json }]|
-      && |\}|
-      && lv_sel_po_json
-      && lv_nf_json
-      && |\}|.
-  ENDMETHOD.
-
-
-  METHOD parse_api_response.
-    " -------------------------------------------------------------------
-    " Parse API response and extract key fields
-    " -------------------------------------------------------------------
-    IF iv_http_status >= 200 AND iv_http_status < 300.
-      ev_status = gc_status_success.
-
-      " Extract SupplierInvoice from response
-      FIND REGEX '"SupplierInvoice"\s*:\s*"([^"]+)"' IN iv_response
-        SUBMATCHES DATA(lv_inv_match).
-      IF sy-subrc = 0.
-        ev_invoice_no = lv_inv_match.
-      ENDIF.
-
-      " Extract FiscalYear from response
-      FIND REGEX '"FiscalYear"\s*:\s*"([^"]+)"' IN iv_response
-        SUBMATCHES DATA(lv_fy_match).
-      IF sy-subrc = 0.
-        ev_fiscal_year = lv_fy_match.
-      ENDIF.
-
-      ev_message = |Fatura { ev_invoice_no }/{ ev_fiscal_year } criada com sucesso|.
-    ELSE.
-      ev_status = gc_status_error.
-
-      " Try to extract error message from OData error response
-      FIND REGEX '"message"\s*:\s*\{[^}]*"value"\s*:\s*"([^"]+)"' IN iv_response
-        SUBMATCHES DATA(lv_err_match).
-      IF sy-subrc = 0.
-        ev_message = lv_err_match.
-      ELSE.
-        ev_message = |HTTP { iv_http_status }: { iv_response }|.
-      ENDIF.
-    ENDIF.
-  ENDMETHOD.
-
-
   METHOD execute_api_call.
-    " Default to error
+    " -------------------------------------------------------------------
+    " Execute a single Supplier Invoice creation via OData V4 Client Proxy
+    " Uses typed structures from Service Consumption Model ZCM_SUPPLIERINVOICE
+    " -------------------------------------------------------------------
     ev_status = gc_status_error.
     CLEAR: ev_message, ev_invoice_no, ev_fiscal_year.
 
     TRY.
-        " 1) Resolve communication arrangement destination
-        DATA(lo_destination) = cl_http_destination_provider=>create_by_comm_arrangement(
-          comm_scenario  = gc_comm_scenario
-          service_id     = gc_outbound_svc ).
+        " 1) Create resource for the A_SupplierInvoice entity set
+        DATA(lo_resource) = io_client_proxy->create_resource_for_entity_set(
+          zcm_supplierinvoice=>gcs_entity_set-a_supplier_invoice ).
 
-        DATA(lo_http_client) = cl_web_http_client_manager=>create_by_http_destination( lo_destination ).
-        DATA(lo_request) = lo_http_client->get_http_request( ).
+        DATA(lo_request) = lo_resource->create_request_for_create( ).
 
-        " 2) Configure request
-        lo_request->set_uri_path( '/sap/opu/odata/sap/API_SUPPLIERINVOICE_PROCESS_SRV/A_SupplierInvoice' ).
-        lo_request->set_header_field( i_name = 'Content-Type' i_value = 'application/json' ).
-        lo_request->set_header_field( i_name = 'Accept'       i_value = 'application/json' ).
-        lo_request->set_header_field( i_name = 'x-csrf-token' i_value = 'fetch' ).
+        " 2) Build payload using typed ABAP structure (type-safe, zero JSON)
+        DATA(ls_invoice) = VALUE zcm_supplierinvoice=>tys_a_supplier_invoice_type(
+          company_code               = is_upload-CompanyCode
+          document_date              = is_upload-DocumentDate
+          posting_date               = is_upload-PostingDate
+          document_currency          = is_upload-Currency
+          invoice_gross_amount       = is_upload-GrossAmount
+          invoicing_party            = is_upload-InvoicingParty
+          supplier_invoice_idby_invc = is_upload-Reference ).
 
-        " 3) Fetch CSRF token via GET
-        DATA(lo_get_response) = lo_http_client->execute( if_web_http_client=>get ).
-        DATA(lv_csrf_token) = lo_get_response->get_header_field( 'x-csrf-token' ).
+        lo_request->set_business_data( ls_invoice ).
 
-        " 4) Execute POST with payload
-        lo_request->set_header_field( i_name = 'x-csrf-token' i_value = lv_csrf_token ).
-        lo_request->set_text( iv_payload ).
+        " 3) Set deep insert for PO Reference Item
+        DATA(lt_po_items) = VALUE zcm_supplierinvoice=>tyt_a_suplr_invc_item_pur_or_2(
+          ( supplier_invoice_item      = '000001'
+            purchase_order             = is_upload-PurchaseOrder
+            purchase_order_item        = is_upload-PoItem
+            tax_code                   = is_upload-TaxCode
+            supplier_invoice_item_amou = is_upload-GrossAmount ) ).
 
-        DATA(lo_response)      = lo_http_client->execute( if_web_http_client=>post ).
-        DATA(lv_http_status)   = lo_response->get_status( )-code.
-        DATA(lv_response_body) = lo_response->get_text( ).
+        lo_request->set_deep_create(
+          EXPORTING
+            it_deep_create = VALUE #(
+              ( iv_navigation_property_name =
+                  zcm_supplierinvoice=>gcs_entity_type-a_supplier_invoice_type-navigation-to_suplr_invc_item_pur_ord
+                it_data = REF #( lt_po_items ) ) ) ).
 
-        lo_http_client->close( ).
+        " 4) Set deep insert for Selected Purchase Orders
+        DATA(lt_sel_po) = VALUE zcm_supplierinvoice=>tyt_a_suplr_invc_seld_purg_d_2(
+          ( purchase_order      = is_upload-PurchaseOrder
+            purchase_order_item = is_upload-PoItem ) ).
 
-        " 5) Parse response
-        parse_api_response(
-          EXPORTING iv_response    = lv_response_body
-                    iv_http_status = lv_http_status
-          IMPORTING ev_status      = ev_status
-                    ev_message     = ev_message
-                    ev_invoice_no  = ev_invoice_no
-                    ev_fiscal_year = ev_fiscal_year ).
+        lo_request->set_deep_create(
+          EXPORTING
+            it_deep_create = VALUE #(
+              ( iv_navigation_property_name =
+                  zcm_supplierinvoice=>gcs_entity_type-a_supplier_invoice_type-navigation-to_selected_purchase_order
+                it_data = REF #( lt_sel_po ) ) ) ).
+
+        " 5) Set deep insert for BR NF Document (Brazil-specific, optional)
+        IF is_upload-NfCategory IS NOT INITIAL.
+          DATA(lt_nf_doc) = VALUE zcm_supplierinvoice=>tyt_a_br_supplier_invoice_nf_2(
+            ( br_nftype = is_upload-NfCategory ) ).
+
+          lo_request->set_deep_create(
+            EXPORTING
+              it_deep_create = VALUE #(
+                ( iv_navigation_property_name =
+                    zcm_supplierinvoice=>gcs_entity_type-a_supplier_invoice_type-navigation-to_br_supplier_invoice_nfd
+                  it_data = REF #( lt_nf_doc ) ) ) ).
+        ENDIF.
+
+        " 6) Execute and read typed response
+        DATA(lo_response) = lo_request->execute( ).
+
+        DATA ls_result TYPE zcm_supplierinvoice=>tys_a_supplier_invoice_type.
+        lo_response->get_business_data( IMPORTING es_business_data = ls_result ).
+
+        ev_status      = gc_status_success.
+        ev_invoice_no  = ls_result-supplier_invoice.
+        ev_fiscal_year = ls_result-fiscal_year.
+        ev_message     = |Fatura { ev_invoice_no }/{ ev_fiscal_year } criada com sucesso|.
+
+      CATCH /iwbep/cx_cp_remote INTO DATA(lx_remote).
+        " OData proxy remote communication errors
+        ev_message = |Erro Proxy: { lx_remote->get_text( ) }|.
+
+      CATCH /iwbep/cx_gateway INTO DATA(lx_gateway).
+        " OData gateway/business logic errors
+        ev_message = |Erro Gateway: { lx_gateway->get_text( ) }|.
 
       CATCH cx_http_dest_provider_error INTO DATA(lx_dest).
+        " Communication arrangement destination errors
         ev_message = |Erro destino: { lx_dest->get_text( ) }|.
+
       CATCH cx_web_http_client_error INTO DATA(lx_http).
+        " HTTP client transport errors
         ev_message = |Erro HTTP: { lx_http->get_text( ) }|.
-      CATCH cx_root INTO DATA(lx_root).
-        ev_message = |Erro: { lx_root->get_text( ) }|.
     ENDTRY.
   ENDMETHOD.
 
